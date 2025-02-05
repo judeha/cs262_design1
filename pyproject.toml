@@ -1,0 +1,8 @@
+[project]
+name = "cs262_hannah_jude"
+version = "0.1.0"
+description = "COMPSCI 262 Design Exercise 1"
+readme = "README.md"
+dependencies = [
+    "pymongo>=4.10.1",
+]
