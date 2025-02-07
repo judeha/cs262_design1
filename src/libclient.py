@@ -67,7 +67,7 @@ class Message:
         return obj
 
     def _create_message(
-        self, *, content_bytes, content_type, content_encoding
+        self, *, content_bytes, content_type, content_encoding, content_opcode
     ):
         if content_type == "text/json":
             jsonheader = {
@@ -75,14 +75,15 @@ class Message:
                 "content-type": content_type,
                 "content-encoding": content_encoding,
                 "content-length": len(content_bytes),
+                "content-opcode": content_opcode,
             }
             jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
             message_hdr = struct.pack(">H", len(jsonheader_bytes))
             message = message_hdr + jsonheader_bytes + content_bytes
         else:
-            header = f"{sys.byteorder}|{content_type}|{content_encoding}|{str(len(content_bytes))}"
-            message_hdr = len(header)
-            message = f"{message_hdr}|{header}|{content_bytes}"
+            header = f"{sys.byteorder}|{content_type}|{content_encoding}|{len(content_bytes)}|{content_opcode}|"
+            message_hdr = struct.pack(">H", len(header))
+            message = message_hdr + bytes(header, encoding="utf-8") + content_bytes
         return message
 
     def _process_response_json_content(self):
@@ -147,17 +148,20 @@ class Message:
         content = self.request["content"]
         content_type = self.request["type"]
         content_encoding = self.request["encoding"]
+        op_code = self.request["op_code"]
         if content_type == "text/json":
             req = {
                 "content_bytes": self._json_encode(content, content_encoding),
                 "content_type": content_type,
                 "content_encoding": content_encoding,
+                "content_opcode": op_code,
             }
         else:
             req = {
                 "content_bytes": content,
                 "content_type": content_type,
                 "content_encoding": content_encoding,
+                "content_opcode": op_code,
             }
         message = self._create_message(**req)
         self._send_buffer += message

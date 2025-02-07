@@ -11,7 +11,7 @@ import threading
 sel = selectors.DefaultSelector()
 
 def create_request(action, value):
-    if action == "search":
+    if action == "json":
         return dict(
             type="text/json",
             encoding="utf-8",
@@ -21,7 +21,8 @@ def create_request(action, value):
         return dict(
             type="binary/custom-client-binary-type",
             encoding="binary",
-            content=bytes(action + value, encoding="utf-8"),
+            op_code = action,
+            content=bytes(value, encoding="utf-8"),
         )
 
 
