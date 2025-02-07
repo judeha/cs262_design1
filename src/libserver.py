@@ -3,6 +3,7 @@ import json
 import selectors
 import struct
 import sys
+import ast
 
 request_search = {
     "morpheus": "Follow the white rabbit. \U0001f430",
@@ -114,12 +115,82 @@ class Message:
         return response
 
     def _create_response_binary_content(self):
-        response = {
-            "content_bytes": b"First 10 bytes of request: "
-            + self.request[:10],
-            "content_type": "binary/custom-server-binary-type",
-            "content_encoding": "binary",
-        }
+        """
+        1. retrieve opcode.
+        2. if else
+        3. action - pass for now
+        4. return success messages
+        """
+        # TODO: change to not using ast later
+        # TODO: separate file for wire protocol + separate config
+        opcode = self.request.get("content-opcode")
+        if opcode == "create_account":
+            response = str(dict(
+                status="success",
+                data="your username is..."
+            ))
+        elif opcode == "login_account":
+            response = str(dict(
+                status="success",
+                data="here are all your messages..."
+            ))
+        elif opcode == "list_accounts":
+            response = str(
+                dict(
+                    status="success",
+                    data="here are all the accounts..."
+                )
+            )
+        elif opcode == "send_message":
+            response = str(
+                dict(
+                    status="success",
+                    data="message sent..."
+                )
+            )
+        elif opcode == "show_new_message": # NOTE: show me the next 5
+            response = str(
+                dict(
+                    status="success",
+                    data="here are your seven new messages..."
+                )
+            )
+        elif opcode == "delete_message":
+            response = str(
+                dict(
+                    status="success",
+                    data="message deleted..."
+                )
+            )
+        elif opcode == "delete_account":
+            response = str(
+                dict(
+                    status="success",
+                    data="account deleted..."
+                )
+            )
+        elif opcode == "go_home":
+            response = str(
+                dict(
+                    status="success",
+                    data="here are all your messages"
+                )
+            )
+        else:
+            response = str(
+                dict(
+                    status="error",
+                    data="invalid opcode..."
+                )
+            )
+
+
+        # response = {
+        #     "content_bytes": b"First 10 bytes of request: "
+        #     + self.request[:10],
+        #     "content_type": "binary/custom-server-binary-type",
+        #     "content_encoding": "binary",
+        # }
         return response
 
     def process_events(self, mask):
@@ -226,11 +297,17 @@ class Message:
         hdrlen = self._header_len
 
         if len(self._recv_buffer) >= hdrlen:
-            self._header = self._custom_decode(
+            str_header = self._custom_decode(
                 self._recv_buffer[:hdrlen], "utf-8"
             )
             self._recv_buffer = self._recv_buffer[hdrlen:]
-            self._header = self._header.split('|')
+            str_header = str_header.split('|')
+            print("STR_HEADER:",str_header)
+            self._header = {
+                "content-length":int(str_header[3]), # TODO: fix hard encodings, casting is bad
+                "content-type":str_header[1],
+                "content-opcode":str_header[4] # TODO: fix hard encodings
+            }
             #TODO write an exception to check data
 
 
@@ -257,19 +334,19 @@ class Message:
         self._set_selector_events_mask("w")
 
     def process_custom_request(self):
-        content_len = int(self._header[3]) #TODO: get rid of str cast
+        content_len = self._header['content-length']
         if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
         args = self._custom_decode(data, "utf-8")
-        self.request = {"value": args.split(',')}
+        self.request = args.split(',')
         print(f"Received request {self.request!r} from {self.addr}")
 
         self._set_selector_events_mask('w')
 
     def create_response(self):
-        if self._header["content-type"] == "text/json": #TODO: json will work, but if binary will be [3] - in process_custom_header, create a self._header dict with just ['content-type'] and ['content-len']. can delete self.is_json
+        if self._header["content-type"] == "text/json": # TODO: maybe this field isn't needed, can rely on self.is_json
             response = self._create_response_json_content()
         else:
             # Binary or unknown content-type
