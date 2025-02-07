@@ -33,7 +33,7 @@ lsock.setblocking(False)
 sel.register(lsock, selectors.EVENT_READ, data=None)
 
 # MongoDB Setup
-client = MongoClient("mongodb://localhost:27017/")  # Use correct MongoDB URI
+client = MongoClient("mongodb://localhost:65432/")  # Use correct MongoDB URI
 db = client["wire_protocols"]
 account_collection = db["accounts"]
 

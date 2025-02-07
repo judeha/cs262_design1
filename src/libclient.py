@@ -69,15 +69,20 @@ class Message:
     def _create_message(
         self, *, content_bytes, content_type, content_encoding
     ):
-        jsonheader = {
-            "byteorder": sys.byteorder,
-            "content-type": content_type,
-            "content-encoding": content_encoding,
-            "content-length": len(content_bytes),
-        }
-        jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
-        message_hdr = struct.pack(">H", len(jsonheader_bytes))
-        message = message_hdr + jsonheader_bytes + content_bytes
+        if content_type == "text/json":
+            jsonheader = {
+                "byteorder": sys.byteorder,
+                "content-type": content_type,
+                "content-encoding": content_encoding,
+                "content-length": len(content_bytes),
+            }
+            jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
+            message_hdr = struct.pack(">H", len(jsonheader_bytes))
+            message = message_hdr + jsonheader_bytes + content_bytes
+        else:
+            header = f"{sys.byteorder}|{content_type}|{content_encoding}|{str(len(content_bytes))}"
+            message_hdr = len(header)
+            message = f"{message_hdr}|{header}|{content_bytes}"
         return message
 
     def _process_response_json_content(self):

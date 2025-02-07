@@ -122,9 +122,11 @@ class Message:
     def read(self):
         self._read()
 
+        # print(f"BUFFER: {self._recv_buffer}")
+
         if self._jsonheader_len is None:
             self.process_protoheader()
-
+    
         if self._jsonheader_len is not None:
             if self.jsonheader is None:
                 self.process_jsonheader()
@@ -192,6 +194,7 @@ class Message:
             encoding = self.jsonheader["content-encoding"]
             self.request = self._json_decode(data, encoding)
             print(f"Received request {self.request!r} from {self.addr}")
+            print(f"Request type: {type(self.request)}")
         else:
             # Binary or unknown content-type
             self.request = data
@@ -211,3 +214,5 @@ class Message:
         message = self._create_message(**response)
         self.response_created = True
         self._send_buffer += message
+
+        

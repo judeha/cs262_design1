@@ -40,65 +40,10 @@ if len(sys.argv) != 5:
     print(f"Usage: {sys.argv[0]} <host> <port> <action> <value>")
     sys.exit(1)
 
-# Tkinter GUI setup
-root = tk.Tk()
-root.title("Chat Client")
-
-# chat_log = tk.Text(root, state=tk.NORMAL, height=20, width=50)
-# chat_log.pack()
-
-BG_GRAY = "#ABB2B9"
-BG_COLOR = "#17202A"
-TEXT_COLOR = "#EAECEE"
-FONT = "Helvetica 14"
-FONT_BOLD = "Helvetica 13 bold"
-
-def send():
-    send = "You -> " + tk.e.get()
-    tk.txt.insert(tk.END, "\n" + send)
- 
-    user = tk.e.get().lower()
-  
-    if (user == "hello"):
-        txt.insert(tk.END, "\n" + "Bot -> Hi there, how can I help?")
- 
-    elif (user == "hi" or user == "hii" or user == "hiiii"):
-        txt.insert(tk.END, "\n" + "Bot -> Hi there, what can I do for you?")
- 
-    else:
-        txt.insert(tk.END, "\n" + "Bot -> fine! and you")
- 
-    e.delete(0, tk.END)
-
-
-lable1 = tk.Label(root, bg=BG_COLOR, fg=TEXT_COLOR, text="Welcome", font=FONT_BOLD, pady=10, width=20, height=1).grid(
-    row=0)
- 
-txt = tk.Text(root, bg=BG_COLOR, fg=TEXT_COLOR, font=FONT, width=60)
-txt.grid(row=1, column=0, columnspan=2)
- 
-scrollbar = tk.Scrollbar(txt)
-scrollbar.place(relheight=1, relx=0.974)
- 
-e = tk.Entry(root, bg="#2C3E50", fg=TEXT_COLOR, font=FONT, width=55)
-e.grid(row=2, column=0)
- 
-send = tk.Button(root, text="Send", font=FONT_BOLD, bg=BG_GRAY,
-              command=send).grid(row=2, column=1)
-
-# message_entry = tk.Entry(root, width=40)
-# message_entry.pack(side=tk.LEFT)
-
-# send_button = tk.Button(root, text="Send", command=send_message)
-# send_button.pack(side=tk.RIGHT)
-
 host, port = sys.argv[1], int(sys.argv[2])
 action, value = sys.argv[3], sys.argv[4]
 request = create_request(action, value)
 start_connection(host, port, request)
-
-# # Start Tkinter event loop
-root.mainloop()
 
 try:
     while True:
