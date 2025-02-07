@@ -77,13 +77,15 @@ class Message:
                 "content-length": len(content_bytes),
                 "content-opcode": content_opcode,
             }
+            type_header = struct.pack(">H", 0)
             jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
             message_hdr = struct.pack(">H", len(jsonheader_bytes))
-            message = message_hdr + jsonheader_bytes + content_bytes
+            message = type_header + message_hdr + jsonheader_bytes + content_bytes
         else:
+            type_header = struct.pack(">H", 1)
             header = f"{sys.byteorder}|{content_type}|{content_encoding}|{len(content_bytes)}|{content_opcode}|"
             message_hdr = struct.pack(">H", len(header))
-            message = message_hdr + bytes(header, encoding="utf-8") + content_bytes
+            message = type_header + message_hdr + bytes(header, encoding="utf-8") + content_bytes
         return message
 
     def _process_response_json_content(self):

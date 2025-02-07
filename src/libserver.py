@@ -18,10 +18,11 @@ class Message:
         self.addr = addr
         self._recv_buffer = b""
         self._send_buffer = b""
-        self._jsonheader_len = None
-        self.jsonheader = None
+        self._header_len = None
+        self._header = None
         self.request = None
         self.response_created = False
+        self.is_json = True
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -74,6 +75,14 @@ class Message:
         tiow.close()
         return obj
 
+    def _custom_encode(self, obj, encoding):
+        #TODO encode the custom action to send to tkinter...
+        pass
+
+    def _custom_decode(self, obj, encoding):
+        return obj.decode(encoding)
+        pass
+
     def _create_message(
         self, *, content_bytes, content_type, content_encoding
     ):
@@ -122,18 +131,38 @@ class Message:
     def read(self):
         self._read()
 
-        # print(f"BUFFER: {self._recv_buffer}")
+        #TODO: Refactor. Simplify branching
 
-        if self._jsonheader_len is None:
+        if self._header_len is None:
             self.process_protoheader()
+        
+        print(f"PROTO: {self.is_json} {self._header_len}")
     
-        if self._jsonheader_len is not None:
-            if self.jsonheader is None:
-                self.process_jsonheader()
+        if self.is_json:
+            if self._header_len is not None:
+                if self._header is None:
+                    self.process_json_header()
+            
+            print(f"HEADER: {self._header}")
 
-        if self.jsonheader:
-            if self.request is None:
-                self.process_request()
+            if self._header:
+                if self.request is None:
+                    self.process_json_request()
+            
+            print(f"CONTENT: {self.request}")
+        else:
+            if self._header_len is not None:
+                if self._header is None:
+                    self.process_custom_header()
+            
+            print(f"HEADER: {self._header}")
+
+            if self._header:
+                if self.request is None:
+                    self.process_custom_request()
+            
+            print(f"CONTENT: {self.request}")
+
 
     def write(self):
         if self.request:
@@ -161,17 +190,26 @@ class Message:
             self.sock = None
 
     def process_protoheader(self):
+        #Process type header
         hdrlen = 2
         if len(self._recv_buffer) >= hdrlen:
-            self._jsonheader_len = struct.unpack(
+            self.is_json = not struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
-    def process_jsonheader(self):
-        hdrlen = self._jsonheader_len
+        #Process proto header
+        hdrlen = 2
         if len(self._recv_buffer) >= hdrlen:
-            self.jsonheader = self._json_decode(
+            self._header_len = struct.unpack(
+                ">H", self._recv_buffer[:hdrlen]
+            )[0]
+            self._recv_buffer = self._recv_buffer[hdrlen:]
+
+    def process_json_header(self):
+        hdrlen = self._header_len
+        if len(self._recv_buffer) >= hdrlen:
+            self._header = self._json_decode(
                 self._recv_buffer[:hdrlen], "utf-8"
             )
             self._recv_buffer = self._recv_buffer[hdrlen:]
@@ -181,17 +219,30 @@ class Message:
                 "content-type",
                 "content-encoding",
             ):
-                if reqhdr not in self.jsonheader:
+                if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
+                
+    def process_custom_header(self):
+        hdrlen = self._header_len
 
-    def process_request(self):
-        content_len = self.jsonheader["content-length"]
+        if len(self._recv_buffer) >= hdrlen:
+            self._header = self._custom_decode(
+                self._recv_buffer[:hdrlen], "utf-8"
+            )
+            self._recv_buffer = self._recv_buffer[hdrlen:]
+            self._header = self._header.split('|')
+            #TODO write an exception to check data
+
+
+    def process_json_request(self):
+        #TODO: Refactor please. Get rid of outer conditional 
+        content_len = self._header["content-length"]
         if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self.jsonheader["content-type"] == "text/json":
-            encoding = self.jsonheader["content-encoding"]
+        if self._header["content-type"] == "text/json":
+            encoding = self._header["content-encoding"]
             self.request = self._json_decode(data, encoding)
             print(f"Received request {self.request!r} from {self.addr}")
             print(f"Request type: {type(self.request)}")
@@ -199,20 +250,34 @@ class Message:
             # Binary or unknown content-type
             self.request = data
             print(
-                f"Received {self.jsonheader['content-type']} "
+                f"Received {self._header['content-type']} "
                 f"request from {self.addr}"
             )
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
 
+    def process_custom_request(self):
+        content_len = int(self._header[3]) #TODO: get rid of str cast
+        if not len(self._recv_buffer) >= content_len:
+            return
+        data = self._recv_buffer[:content_len]
+        self._recv_buffer = self._recv_buffer[content_len:]
+        args = self._custom_decode(data, "utf-8")
+        self.request = {"value": args.split(',')}
+        print(f"Received request {self.request!r} from {self.addr}")
+
+        self._set_selector_events_mask('w')
+
     def create_response(self):
-        if self.jsonheader["content-type"] == "text/json":
+        if self._header["content-type"] == "text/json": #TODO: json will work, but if binary will be [3] - in process_custom_header, create a self._header dict with just ['content-type'] and ['content-len']. can delete self.is_json
             response = self._create_response_json_content()
         else:
             # Binary or unknown content-type
+            print("HARD AT WORK")
             response = self._create_response_binary_content()
         message = self._create_message(**response)
         self.response_created = True
+        print(f"STILL HARD AT WORK. PROOF: {message}")
         self._send_buffer += message
 
         

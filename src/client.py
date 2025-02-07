@@ -15,7 +15,8 @@ def create_request(action, value):
         return dict(
             type="text/json",
             encoding="utf-8",
-            content=dict(action=action, value=value),
+            op_code = action,
+            content=dict(value=value),
         )
     else:
         return dict(
