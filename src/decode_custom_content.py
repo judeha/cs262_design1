@@ -46,3 +46,7 @@ encoded = b'\x00\x03\x00\x0estrcreate_account\x00\x05strhjkim\x00\x04int\x00\x0e
 
 decoded = decode_custom_content(encoded)
 print("DECODED:",decoded)
+
+# TODO: maybe can swap in string delimiters
+# ['int', '4', 'str', 'username']
+# then bytes

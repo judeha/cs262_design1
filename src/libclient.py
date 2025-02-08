@@ -4,7 +4,6 @@ import selectors
 import struct
 import sys
 
-
 class Message:
     def __init__(self, selector, sock, addr, request):
         self.selector = selector
