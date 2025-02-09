@@ -3,6 +3,7 @@ import json
 import selectors
 import struct
 import sys
+from response_codes import ResponseCode, RESPONSE_MESSAGES  
 
 class Message:
     def __init__(self, selector, sock, addr, request):
@@ -83,20 +84,48 @@ class Message:
     def _process_response_json_content(self):
         content = self.response
         opcode = content.get("opcode")
-        if opcode == "deliver_message":
+        status_code = content['result'].get("status_code")
+        print(RESPONSE_MESSAGES.get(ResponseCode(status_code), "Unknown response code"))
+        if status_code != ResponseCode.SUCCESS.value:
             pass
-        elif opcode == "create_account":
-            if content.get("status") == "Successfully created account":
-                print("Account created successfully")
+            # TODO: stay on the page
+        else:
+            if opcode == "create_account":
+                pass
+                # TODO: display login page
+            elif opcode == "login_account":
+                print("Here are your messages: ", content.get("data").get("messages"))
+                print("You have ", content.get("data").get("count"), " unread messages.")
+                # TODO: display homepage
+            elif opcode == "delete_account":
+                pass
+                # TODO: display create account page
+            elif opcode == "read_msg_delivered":
+                print("Here are your messages: ", content.get("data").get("messages"))
+                print("You have ", content.get("data").get("count"), " unread messages.")
+                # TODO: display homepage
+            elif opcode == "read_msg_undelivered":
+                print("Here are your messages: ", content.get("data").get("messages"))
+                print("You have ", content.get("data").get("count"), " unread messages.")
+                # TODO: display homepage
+            elif opcode == "delete_msg":
+                pass
+                # TODO: display homepage
+            elif opcode == "list_all_accounts":
+                print("Here are all the accounts: ", content.get("data").get("accounts"))
+                # TODO: display accounts
+            elif opcode == "homepage":
+                print("Here are your messages: ", content.get("data").get("messages"))
+                print("You have ", content.get("data").get("count"), " unread messages.")
+                # TODO: display homepage
+            elif opcode == "send_msg":
+                pass
+                # TODO: display homepage
+            elif opcode == "receive_msg":
+                print("You have a new message. Here are your messages: ", content.get("data").get("messages"))
+                # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
             else:
-                print("Account creation failed")
-        elif opcode == "login_account":
-            if content.get("status") == "Successfully logged in":
-                print(content.get("status"), f"Undelivered messages: {content.get('count')}", content.get("messages"))
-            else:
-                print("Account deletion failed")
-        result = content.get("status")
-        print(f"Got result: {result}")
+                print("Unknown opcode")
 
     def _process_response_binary_content(self):
         content = self.response

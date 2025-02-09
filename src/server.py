@@ -7,6 +7,10 @@ import libserver
 
 from pymongo import MongoClient
 from datetime import datetime
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from database_setup import database_setup
+
 
 sel = selectors.DefaultSelector()
 
@@ -21,6 +25,8 @@ def accept_wrapper(sock):
 if len(sys.argv) != 3:
     print(f"Usage: {sys.argv[0]} <host> <port>")
     sys.exit(1)
+
+database_setup()
 
 host, port = sys.argv[1], int(sys.argv[2])
 lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -57,3 +63,5 @@ except KeyboardInterrupt:
     print("Caught keyboard interrupt, exiting")
 finally:
     sel.close()
+
+os.remove("messages.db")

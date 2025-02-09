@@ -16,3 +16,4 @@ RESPONSE_MESSAGES = {
     ResponseCode.MESSAGE_SEND_FAILURE: "Failed to send message",
     ResponseCode.DATABASE_ERROR: "Database error",
 }
+

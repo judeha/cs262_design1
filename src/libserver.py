@@ -4,14 +4,10 @@ import selectors
 import struct
 import sys
 import ast
+import datetime
+from enum import Enum
+from response_codes import ResponseCode
 from database import DatabaseHandler
-
-request_search = {
-    "morpheus": "Follow the white rabbit. \U0001f430",
-    "ring": "In the caves beneath the Misty Mountains. \U0001f48d",
-    "\U0001f436": "\U0001f43e Playing ball! \U0001f3d0",
-}
-
 
 class Message:
     def __init__(self, selector, sock, addr):
@@ -26,6 +22,7 @@ class Message:
         self.response_created = False
         self.is_json = True
         self.db = DatabaseHandler() # TODO: should we move this outside?
+        self.active_clients = {} # TODO: in-session tracking improved?
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -89,132 +86,61 @@ class Message:
     def _create_message(
         self, response
     ):
-        content_bytes = self._json_encode(response["content"], response["content_encoding"])
-        jsonheader = {
-            "byteorder": sys.byteorder,
-            "content_type": response["content_type"],
-            "content_encoding": response["content_encoding"],
-            "content_length": len(content_bytes),
-        }
-        jsonheader_bytes = self._json_encode(jsonheader, response["content_encoding"])
+        content_bytes = self._json_encode(response, self._header["content_encoding"])
+        jsonheader = self._header
+        jsonheader["content_length"] = len(content_bytes)
+        jsonheader_bytes = self._json_encode(jsonheader, self._header["content_encoding"])
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
     def _create_response_json_content(self):
+        # TODO: catch input exceptions here
         opcode = self.request.get("opcode")
         if opcode == "create_account":
-            status = self.db.create_account(*self.request.get("args"))
-            content = {"opcode": opcode, "status": status[0]}
+            result = self.db.create_account(*self.request.get("args"))
         elif opcode == "login_account":
-            messages = self.db.login_account(*self.request.get("args"))
-            if len(messages) == 1:
-                content = {"opcode": opcode, "status": messages[0]}
-            else:
-                content = {"status": messages[0], "count": messages[1], "messages": messages[2:]}
+            result = self.db.login_account(*self.request.get("args"))
+            # Add to active clients
+            if result["status_code"] == ResponseCode.SUCCESS.value:
+                pass
+                # self.active_clients[result["data"]["username"]] = self.sock
         elif opcode == "list_accounts":
-            accounts = self.db.list_accounts()
-            if len(accounts) == 1:
-                content = {"opcode": opcode, "status": accounts[0]}
+            result = self.db.list_accounts()
+        elif opcode == "delete_account":
+            result = self.db.delete_account(*self.request.get("args"))
+        elif opcode == "homepage":
+            result = self.db.fetch_homepage(*self.request.get("args"))
+        elif opcode == "read_msg_undelivered":
+            result = self.db.fetch_messages_undelivered(*self.request.get("args"))
+        elif opcode == "read_msg_delivered":
+            result = self.db.fetch_messages_delivered(*self.request.get("args"))
+        elif opcode == "delete_msg":
+            result = self.db.delete_messages(*self.request.get("args"))
+        elif opcode == "send_msg":
+            # Check if receiver exists
+            if not self.db.account_exists(self.request.get("args")[1]):
+                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+                return result
+            # TODO: Check if receiver is online. verify sending
+            msg_sent = True
+            if not msg_sent:
+                result = {"status_code": ResponseCode.MESSAGE_SEND_FAILURE.value}
+                delivered = False
             else:
-                content = {"opcode": opcode, "status": accounts[0], "accounts": accounts[1:]}
-        elif opcode == "send_message":
-            # TODO: in caller: handle timestamp
-            timestamp = 111
-            # TODO: in caller: send to client
-            # TODO: in caller: check if receiver is open
-            # status = self.db.insert_message(*self.request.get("args"))
-            status = self.db.insert_message("anonymous", self.request.get("args")[0], self.request.get("args")[1], timestamp, 0)
-            content = {"opcode": opcode, "status": status[0]}
+                delivered = True
+            # Insert message into database
+            timestamp = round(datetime.datetime.now().microsecond)
+            result = self.db.insert_message(*self.request.get("args"), timestamp, delivered)
+        elif opcode == "receive_msg":
+            pass
         else:
-            content = {"opcode": "ERROR", "status": f"Error: invalid action '{opcode}'."}
-        content_encoding = "utf-8"
-        response = {
-            "byteorder": sys.byteorder,
-            "content": content,
-            "content_type": "json",
-            "content_encoding": content_encoding,
-        }
+            pass
+        response = {"opcode": opcode, "result": result}
         return response
 
     def _create_response_binary_content(self):
-        """
-        1. retrieve opcode.
-        2. if else
-        3. action - pass for now
-        4. return success messages
-        """
-        # TODO: change to not using ast later
-        # TODO: separate file for wire protocol + separate config
-        opcode = self.request.get("content-opcode")
-        if opcode == "create_account":
-            response = str(dict(
-                status="success",
-                data="your username is..."
-            ))
-        elif opcode == "login_account":
-            response = str(dict(
-                status="success",
-                data="here are all your messages..."
-            ))
-        elif opcode == "list_accounts":
-            response = str(
-                dict(
-                    status="success",
-                    data="here are all the accounts..."
-                )
-            )
-        elif opcode == "send_message":
-            response = str(
-                dict(
-                    status="success",
-                    data="message sent..."
-                )
-            )
-        elif opcode == "show_new_message": # NOTE: show me the next 5
-            response = str(
-                dict(
-                    status="success",
-                    data="here are your seven new messages..."
-                )
-            )
-        elif opcode == "delete_message":
-            response = str(
-                dict(
-                    status="success",
-                    data="message deleted..."
-                )
-            )
-        elif opcode == "delete_account":
-            response = str(
-                dict(
-                    status="success",
-                    data="account deleted..."
-                )
-            )
-        elif opcode == "go_home":
-            response = str(
-                dict(
-                    status="success",
-                    data="here are all your messages"
-                )
-            )
-        else:
-            response = str(
-                dict(
-                    status="error",
-                    data="invalid opcode..."
-                )
-            )
-
-
-        # response = {
-        #     "content_bytes": b"First 10 bytes of request: "
-        #     + self.request[:10],
-        #     "content_type": "binary/custom-server-binary-type",
-        #     "content_encoding": "binary",
-        # }
-        return response
+       pass
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -280,6 +206,11 @@ class Message:
             print(f"Error: socket.close() exception for {self.addr}: {e!r}")
         finally:
             # Delete reference to socket object for garbage collection
+            # NOTE: new
+            if hasattr(self, 'active_clients'):
+                for username, client_sock in list(self.active_clients.items()):
+                    if client_sock == self.sock:
+                        del self.active_clients[username]
             self.sock = None
 
     def process_protoheader(self):
