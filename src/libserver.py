@@ -4,6 +4,7 @@ import selectors
 import struct
 import sys
 import ast
+from database import DatabaseHandler
 
 request_search = {
     "morpheus": "Follow the white rabbit. \U0001f430",
@@ -24,6 +25,7 @@ class Message:
         self.request = None
         self.response_created = False
         self.is_json = True
+        self.db = DatabaseHandler() # TODO: should we move this outside?
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -85,31 +87,52 @@ class Message:
         pass
 
     def _create_message(
-        self, *, content_bytes, content_type, content_encoding
+        self, response
     ):
+        content_bytes = self._json_encode(response["content"], response["content_encoding"])
         jsonheader = {
             "byteorder": sys.byteorder,
-            "content-type": content_type,
-            "content-encoding": content_encoding,
-            "content-length": len(content_bytes),
+            "content_type": response["content_type"],
+            "content_encoding": response["content_encoding"],
+            "content_length": len(content_bytes),
         }
-        jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
+        jsonheader_bytes = self._json_encode(jsonheader, response["content_encoding"])
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
     def _create_response_json_content(self):
-        action = self.request.get("action")
-        if action == "search":
-            query = self.request.get("value")
-            answer = request_search.get(query) or f"No match for '{query}'."
-            content = {"result": answer}
+        opcode = self.request.get("opcode")
+        if opcode == "create_account":
+            status = self.db.create_account(*self.request.get("args"))
+            content = {"opcode": opcode, "status": status[0]}
+        elif opcode == "login_account":
+            messages = self.db.login_account(*self.request.get("args"))
+            if len(messages) == 1:
+                content = {"opcode": opcode, "status": messages[0]}
+            else:
+                content = {"status": messages[0], "count": messages[1], "messages": messages[2:]}
+        elif opcode == "list_accounts":
+            accounts = self.db.list_accounts()
+            if len(accounts) == 1:
+                content = {"opcode": opcode, "status": accounts[0]}
+            else:
+                content = {"opcode": opcode, "status": accounts[0], "accounts": accounts[1:]}
+        elif opcode == "send_message":
+            # TODO: in caller: handle timestamp
+            timestamp = 111
+            # TODO: in caller: send to client
+            # TODO: in caller: check if receiver is open
+            # status = self.db.insert_message(*self.request.get("args"))
+            status = self.db.insert_message("anonymous", self.request.get("args")[0], self.request.get("args")[1], timestamp, 0)
+            content = {"opcode": opcode, "status": status[0]}
         else:
-            content = {"result": f"Error: invalid action '{action}'."}
+            content = {"opcode": "ERROR", "status": f"Error: invalid action '{opcode}'."}
         content_encoding = "utf-8"
         response = {
-            "content_bytes": self._json_encode(content, content_encoding),
-            "content_type": "text/json",
+            "byteorder": sys.byteorder,
+            "content": content,
+            "content_type": "json",
             "content_encoding": content_encoding,
         }
         return response
@@ -207,33 +230,32 @@ class Message:
         if self._header_len is None:
             self.process_protoheader()
         
-        print(f"PROTO: {self.is_json} {self._header_len}")
+        # print(f"PROTO: {self.is_json} {self._header_len}")
     
         if self.is_json:
             if self._header_len is not None:
                 if self._header is None:
                     self.process_json_header()
             
-            print(f"HEADER: {self._header}")
+            # print(f"HEADER: {self._header}")
 
             if self._header:
                 if self.request is None:
                     self.process_json_request()
             
-            print(f"CONTENT: {self.request}")
+            # print(f"CONTENT: {self.request}")
         else:
             if self._header_len is not None:
                 if self._header is None:
                     self.process_custom_header()
             
-            print(f"HEADER: {self._header}")
+            # print(f"HEADER: {self._header}")
 
             if self._header:
                 if self.request is None:
                     self.process_custom_request()
             
-            print(f"CONTENT: {self.request}")
-
+            # print(f"CONTENT: {self.request}")
 
     def write(self):
         if self.request:
@@ -261,14 +283,6 @@ class Message:
             self.sock = None
 
     def process_protoheader(self):
-        #Process type header
-        hdrlen = 2
-        if len(self._recv_buffer) >= hdrlen:
-            self.is_json = not struct.unpack(
-                ">H", self._recv_buffer[:hdrlen]
-            )[0]
-            self._recv_buffer = self._recv_buffer[hdrlen:]
-
         #Process proto header
         hdrlen = 2
         if len(self._recv_buffer) >= hdrlen:
@@ -280,81 +294,54 @@ class Message:
     def process_json_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
-            self._header = self._json_decode(
-                self._recv_buffer[:hdrlen], "utf-8"
-            )
+            self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 "byteorder",
-                "content-length",
-                "content-type",
-                "content-encoding",
+                "content_type",
+                "content_encoding",
+                "content_length",
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
                 
     def process_custom_header(self):
-        hdrlen = self._header_len
-
-        if len(self._recv_buffer) >= hdrlen:
-            str_header = self._custom_decode(
-                self._recv_buffer[:hdrlen], "utf-8"
-            )
-            self._recv_buffer = self._recv_buffer[hdrlen:]
-            str_header = str_header.split('|')
-            print("STR_HEADER:",str_header)
-            self._header = {
-                "content-length":int(str_header[3]), # TODO: fix hard encodings, casting is bad
-                "content-type":str_header[1],
-                "content-opcode":str_header[4] # TODO: fix hard encodings
-            }
-            #TODO write an exception to check data
-
+        pass
 
     def process_json_request(self):
         #TODO: Refactor please. Get rid of outer conditional 
-        content_len = self._header["content-length"]
+        content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self._header["content-type"] == "text/json":
-            encoding = self._header["content-encoding"]
+        if self._header["content_type"] == "json":
+            encoding = self._header["content_encoding"]
             self.request = self._json_decode(data, encoding)
             print(f"Received request {self.request!r} from {self.addr}")
             print(f"Request type: {type(self.request)}")
         else:
-            # Binary or unknown content-type
-            self.request = data
-            print(
-                f"Received {self._header['content-type']} "
-                f"request from {self.addr}"
-            )
+            pass
+            # # Binary or unknown content-type
+            # self.request = data
+            # print(
+            #     f"Received {self._header['content-type']} "
+            #     f"request from {self.addr}"
+            # )
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
 
     def process_custom_request(self):
-        content_len = self._header['content-length']
-        if not len(self._recv_buffer) >= content_len:
-            return
-        data = self._recv_buffer[:content_len]
-        self._recv_buffer = self._recv_buffer[content_len:]
-        args = self._custom_decode(data, "utf-8")
-        self.request = args.split(',')
-        print(f"Received request {self.request!r} from {self.addr}")
-
-        self._set_selector_events_mask('w')
+        pass
 
     def create_response(self):
-        if self._header["content-type"] == "text/json": # TODO: maybe this field isn't needed, can rely on self.is_json
+        if self._header["content_type"] == "json": # TODO: maybe this field isn't needed, can rely on self.is_json
             response = self._create_response_json_content()
         else:
             # Binary or unknown content-type
-            print("HARD AT WORK")
             response = self._create_response_binary_content()
-        message = self._create_message(**response)
+        message = self._create_message(response)
         self.response_created = True
-        print(f"STILL HARD AT WORK. PROOF: {message}")
         self._send_buffer += message
 
         

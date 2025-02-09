@@ -66,30 +66,36 @@ class Message:
         return obj
 
     def _create_message(
-        self, *, content_bytes, content_type, content_encoding, content_opcode
-    ):
-        if content_type == "text/json":
-            jsonheader = {
-                "byteorder": sys.byteorder,
-                "content-type": content_type,
-                "content-encoding": content_encoding,
-                "content-length": len(content_bytes),
-                "content-opcode": content_opcode,
-            }
-            type_header = struct.pack(">H", 0)
-            jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
-            message_hdr = struct.pack(">H", len(jsonheader_bytes))
-            message = type_header + message_hdr + jsonheader_bytes + content_bytes
-        else:
-            type_header = struct.pack(">H", 1)
-            header = f"{sys.byteorder}|{content_type}|{content_encoding}|{len(content_bytes)}|{content_opcode}|"
-            message_hdr = struct.pack(">H", len(header))
-            message = type_header + message_hdr + bytes(header, encoding="utf-8") + content_bytes
+        self, req):
+        # Encode content
+        content_bytes = self._json_encode(req["content"], req["content_encoding"])
+        jsonheader = {
+            "byteorder": sys.byteorder,
+            "content_type": req['content_type'],
+            "content_encoding": req['content_encoding'],
+            "content_length": len(content_bytes),
+        }
+        jsonheader_bytes = self._json_encode(jsonheader, req["content_encoding"])
+        message_hdr = struct.pack(">H", len(jsonheader_bytes))
+        message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
     def _process_response_json_content(self):
         content = self.response
-        result = content.get("result")
+        opcode = content.get("opcode")
+        if opcode == "deliver_message":
+            pass
+        elif opcode == "create_account":
+            if content.get("status") == "Successfully created account":
+                print("Account created successfully")
+            else:
+                print("Account creation failed")
+        elif opcode == "login_account":
+            if content.get("status") == "Successfully logged in":
+                print(content.get("status"), f"Undelivered messages: {content.get('count')}", content.get("messages"))
+            else:
+                print("Account deletion failed")
+        result = content.get("status")
         print(f"Got result: {result}")
 
     def _process_response_binary_content(self):
@@ -146,25 +152,9 @@ class Message:
             self.sock = None
 
     def queue_request(self):
-        content = self.request["content"]
-        content_type = self.request["type"]
-        content_encoding = self.request["encoding"]
-        op_code = self.request["op_code"]
-        if content_type == "text/json":
-            req = {
-                "content_bytes": self._json_encode(content, content_encoding),
-                "content_type": content_type,
-                "content_encoding": content_encoding,
-                "content_opcode": op_code,
-            }
-        else:
-            req = {
-                "content_bytes": content,
-                "content_type": content_type,
-                "content_encoding": content_encoding,
-                "content_opcode": op_code,
-            }
-        message = self._create_message(**req)
+        print("PRE REQUEST", self.request)
+        message = self._create_message(self.request)
+        print("POST REQUEST", message)
         self._send_buffer += message
         self._request_queued = True
 
@@ -179,37 +169,36 @@ class Message:
     def process_jsonheader(self):
         hdrlen = self._jsonheader_len
         if len(self._recv_buffer) >= hdrlen:
-            self.jsonheader = self._json_decode(
-                self._recv_buffer[:hdrlen], "utf-8"
-            )
+            self.jsonheader = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 "byteorder",
-                "content-length",
-                "content-type",
-                "content-encoding",
+                "content_length",
+                "content_type",
+                "content_encoding",
             ):
                 if reqhdr not in self.jsonheader:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
 
     def process_response(self):
-        content_len = self.jsonheader["content-length"]
+        content_len = self.jsonheader["content_length"]
         if not len(self._recv_buffer) >= content_len:
             return
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self.jsonheader["content-type"] == "text/json":
-            encoding = self.jsonheader["content-encoding"]
+        if self.jsonheader["content_type"] == "json":
+            encoding = self.jsonheader["content_encoding"]
             self.response = self._json_decode(data, encoding)
             print(f"Received response {self.response!r} from {self.addr}")
             self._process_response_json_content()
         else:
-            # Binary or unknown content-type
-            self.response = data
-            print(
-                f"Received {self.jsonheader['content-type']} "
-                f"response from {self.addr}"
-            )
-            self._process_response_binary_content()
+            pass
+            # # Binary or unknown content-type
+            # self.response = data
+            # print(
+            #     f"Received {self.jsonheader['content-type']} "
+            #     f"response from {self.addr}"
+            # )
+            # self._process_response_binary_content()
         # Close when response has been processed
         self.close()
