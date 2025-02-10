@@ -65,7 +65,7 @@ class DatabaseHandler():
             # Count unread messages
             count = self.count_messages(username, False)
             assert(count != -1)
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"messages": messages, "count": count}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": [count] + messages}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
@@ -74,7 +74,7 @@ class DatabaseHandler():
             # Fetch all accounts
             self.cursor.execute("SELECT * FROM accounts")
             accounts = self.cursor.fetchall()
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"accounts": accounts}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
         
@@ -111,7 +111,7 @@ class DatabaseHandler():
             self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?",
                                 (username, n))
             messages = self.cursor.fetchall()
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"messages": messages}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": messages}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
     

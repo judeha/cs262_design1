@@ -5,8 +5,6 @@ import struct
 import sys
 from response_codes import ResponseCode, RESPONSE_MESSAGES  
 
-version = 1 # TODO: put in config file, change from >H if float
-
 class Message:
     def __init__(self, selector, sock, addr, request):
         self.selector = selector
@@ -56,19 +54,8 @@ class Message:
                 pass
             else:
                 self._send_buffer = self._send_buffer[sent:]
-
-    def _json_encode(self, obj, encoding):
-        return json.dumps(obj, ensure_ascii=False).encode(encoding)
-
-    def _json_decode(self, json_bytes, encoding):
-        tiow = io.TextIOWrapper(
-            io.BytesIO(json_bytes), encoding=encoding, newline=""
-        )
-        obj = json.load(tiow)
-        tiow.close()
-        return obj
-
-    def _package_request(
+ 
+    def _stub_client_package(
         self, req):
         # Encode content
         encoding = req["content_encoding"]
@@ -83,38 +70,15 @@ class Message:
         }
         jsonheader_bytes = self._json_encode(jsonheader, encoding)
         # Encode protoheader and package message
-        message_hdr = struct.pack(">H", version) + struct.pack(">H", len(jsonheader_bytes))
+        message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
-    
-    def _process_response(self):
-        # Check if request is fully received
-        content_len = self._header["content_length"]
-        if not len(self._recv_buffer) >= content_len: # TODO: exception
-            return
-        
-        # Save data from receive buffer
-        data = self._recv_buffer[:content_len]
-        self._recv_buffer = self._recv_buffer[content_len:]
 
-        # Decode response data
-        encoding = self._header["content_encoding"]
-        self.response = self._json_decode(data, encoding)
-        print(f"Received response {self.response!r} from {self.addr}")
-
-        # Process response content
-        self._generate_action()
-
-        # Close when response has been processed
-        self.close()
-
-    def _generate_action(self):
-        # Get opcode, status code, and data from self._header and self.response
+    def _process_response_content(self):
+        # Get opcode, status_code, and data from self._header and self.response
         opcode = self._header.get("opcode")
-        status_code = self.response.get("status_code")
-        data = self.response.get("data")
-
-        # TODO: enforce I/O
+        status_code = self.response.pop()
+        data = self.response
         print(RESPONSE_MESSAGES.get(ResponseCode(status_code), "Unknown response code"))
         if status_code != ResponseCode.SUCCESS.value:
             pass
@@ -135,14 +99,14 @@ class Message:
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
             elif opcode == "read_msg_undelivered":
-                print("Here are your messages: ", data[1])
+                print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
             elif opcode == "delete_msg":
                 pass
                 # TODO: display homepage
             elif opcode == "list_all_accounts":
-                print("Here are all the accounts: ", [data])
+                print("Here are all the accounts: ", data)
                 # TODO: display accounts
             elif opcode == "homepage":
                 print("Here are your messages: ", data[1:])
@@ -172,10 +136,10 @@ class Message:
 
         # Decode header and content
         if self._header_len is not None and self._header is None:
-            self.process_header()
+            self.process_json_header()
 
         if self._header and self.response is None:
-            self.process_content()
+            self.process_json_response()
 
     def write(self):
         if not self._request_queued:
@@ -206,60 +170,72 @@ class Message:
             self.sock = None
 
     def queue_request(self):
-        message = self._package_request(self.request)
+        message = self._stub_client(self.request)
         self._send_buffer += message
         self._request_queued = True
         
     def process_protoheader(self):
         hdrlen = 2
-        
-        if len(self._recv_buffer) >= hdrlen:
-            v = struct.unpack(
-                ">H", self._recv_buffer[:hdrlen]
-            )[0]
-            if v != version: 
-                raise ValueError(f"Unsupported version: {v}")
-            self._recv_buffer = self._recv_buffer[hdrlen:]
-
-
         if len(self._recv_buffer) >= hdrlen:
             self._header_len = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
-    def process_header(self):
+    def process_custom_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
-            self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
+            # Read header data
+            data = self._recv_buffer[:hdrlen]
+            # Decode data
+            hdr = data.decode("utf-8").split("|")
+            self._header = {
+                "byteorder": hdr[0],
+                "content_type": hdr[1],
+                "content_encoding": hdr[2],
+                "content_length": int(hdr[3])
+            }
             self._recv_buffer = self._recv_buffer[hdrlen:]
-            for reqhdr in (
-                # "byteorder",
-                "content_length",
-                # "content_type",
-                "content_encoding",
-                "opcode"
-            ):
-                if reqhdr not in self._header:
-                    raise ValueError(f"Missing required header '{reqhdr}'.")
-                
-    def process_content(self):
+        # TODO: catch exception
+
+    def process_custom_response(self):
         # Check if request is fully received
         content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len: # TODO: exception
             return
         
         # Save data from receive buffer
+        encoding = self._header["content_encoding"]
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
 
         # Decode response data
-        encoding = self._header["content_encoding"]
-        self.response = self._json_decode(data, encoding)
+        req = data.split("|")
+        self.response = {
+            "opcode": req[0],
+            "result": {"status_code": req[1]}
+        }
+        if len(req) > 2:
+            self.response["data"] = req[2]
+
         print(f"Received response {self.response!r} from {self.addr}")
 
         # Process response content
-        self._process_response()
+        self._process_response_content()
 
         # Close when response has been processed
         self.close()
+
+    def _create_custom_message(self, req):
+        # Encode content
+        content = [req['content']['opcode']] + req['content']['args']
+        content_str = str.join("|", content)
+        content_bytes = bytes(content_str, req["content_encoding"])
+        # Encode header
+        jsonheader = [req['byteorder'],req['content_type'],req['content_encoding'],str(len(content_bytes))]
+        jsonheader_str = str.join("|", jsonheader)
+        jsonheader_bytes = bytes(jsonheader_str, req["content_encoding"])
+        message_hdr = struct.pack(">H", self.is_custom) + struct.pack(">H", len(jsonheader_bytes))
+        message = message_hdr + jsonheader_bytes + content_bytes
+        return message
+    
