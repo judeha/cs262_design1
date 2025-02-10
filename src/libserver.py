@@ -4,14 +4,10 @@ import selectors
 import struct
 import sys
 import ast
+import datetime
+from enum import Enum
+from response_codes import ResponseCode
 from database import DatabaseHandler
-
-request_search = {
-    "morpheus": "Follow the white rabbit. \U0001f430",
-    "ring": "In the caves beneath the Misty Mountains. \U0001f48d",
-    "\U0001f436": "\U0001f43e Playing ball! \U0001f3d0",
-}
-
 
 class Message:
     def __init__(self, selector, sock, addr):
@@ -24,8 +20,9 @@ class Message:
         self._header = None
         self.request = None
         self.response_created = False
-        self.is_json = True
         self.db = DatabaseHandler() # TODO: should we move this outside?
+        self.active_clients = {} # TODO: in-session tracking improved?
+        self.is_json = True
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -86,134 +83,66 @@ class Message:
         return obj.decode(encoding)
         pass
 
-    def _create_message(
+    def _create_json_message(
         self, response
     ):
-        content_bytes = self._json_encode(response["content"], response["content_encoding"])
-        jsonheader = {
-            "byteorder": sys.byteorder,
-            "content_type": response["content_type"],
-            "content_encoding": response["content_encoding"],
-            "content_length": len(content_bytes),
-        }
-        jsonheader_bytes = self._json_encode(jsonheader, response["content_encoding"])
+        # Encode content
+        content_bytes = self._json_encode(response, self._header["content_encoding"])
+        # Encode header
+        jsonheader = self._header
+        jsonheader["content_length"] = len(content_bytes)
+        jsonheader_bytes = self._json_encode(jsonheader, self._header["content_encoding"])
+        # Encode protoheader and package message
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
-    def _create_response_json_content(self):
+    def _create_custom_message(self, response):
+        pass
+
+    def _create_response_content(self):
+        # TODO: catch input exceptions here
         opcode = self.request.get("opcode")
         if opcode == "create_account":
-            status = self.db.create_account(*self.request.get("args"))
-            content = {"opcode": opcode, "status": status[0]}
+            result = self.db.create_account(*self.request.get("args"))
         elif opcode == "login_account":
-            messages = self.db.login_account(*self.request.get("args"))
-            if len(messages) == 1:
-                content = {"opcode": opcode, "status": messages[0]}
-            else:
-                content = {"status": messages[0], "count": messages[1], "messages": messages[2:]}
+            result = self.db.login_account(*self.request.get("args"))
+            # Add to active clients
+            if result["status_code"] == ResponseCode.SUCCESS.value:
+                pass
+                # self.active_clients[result["data"]["username"]] = self.sock
         elif opcode == "list_accounts":
-            accounts = self.db.list_accounts()
-            if len(accounts) == 1:
-                content = {"opcode": opcode, "status": accounts[0]}
-            else:
-                content = {"opcode": opcode, "status": accounts[0], "accounts": accounts[1:]}
-        elif opcode == "send_message":
-            # TODO: in caller: handle timestamp
-            timestamp = 111
-            # TODO: in caller: send to client
-            # TODO: in caller: check if receiver is open
-            # status = self.db.insert_message(*self.request.get("args"))
-            status = self.db.insert_message("anonymous", self.request.get("args")[0], self.request.get("args")[1], timestamp, 0)
-            content = {"opcode": opcode, "status": status[0]}
-        else:
-            content = {"opcode": "ERROR", "status": f"Error: invalid action '{opcode}'."}
-        content_encoding = "utf-8"
-        response = {
-            "byteorder": sys.byteorder,
-            "content": content,
-            "content_type": "json",
-            "content_encoding": content_encoding,
-        }
-        return response
-
-    def _create_response_binary_content(self):
-        """
-        1. retrieve opcode.
-        2. if else
-        3. action - pass for now
-        4. return success messages
-        """
-        # TODO: change to not using ast later
-        # TODO: separate file for wire protocol + separate config
-        opcode = self.request.get("content-opcode")
-        if opcode == "create_account":
-            response = str(dict(
-                status="success",
-                data="your username is..."
-            ))
-        elif opcode == "login_account":
-            response = str(dict(
-                status="success",
-                data="here are all your messages..."
-            ))
-        elif opcode == "list_accounts":
-            response = str(
-                dict(
-                    status="success",
-                    data="here are all the accounts..."
-                )
-            )
-        elif opcode == "send_message":
-            response = str(
-                dict(
-                    status="success",
-                    data="message sent..."
-                )
-            )
-        elif opcode == "show_new_message": # NOTE: show me the next 5
-            response = str(
-                dict(
-                    status="success",
-                    data="here are your seven new messages..."
-                )
-            )
-        elif opcode == "delete_message":
-            response = str(
-                dict(
-                    status="success",
-                    data="message deleted..."
-                )
-            )
+            result = self.db.list_accounts()
         elif opcode == "delete_account":
-            response = str(
-                dict(
-                    status="success",
-                    data="account deleted..."
-                )
-            )
-        elif opcode == "go_home":
-            response = str(
-                dict(
-                    status="success",
-                    data="here are all your messages"
-                )
-            )
+            result = self.db.delete_account(*self.request.get("args"))
+        elif opcode == "homepage":
+            result = self.db.fetch_homepage(*self.request.get("args"))
+        elif opcode == "read_msg_undelivered":
+            result = self.db.fetch_messages_undelivered(*self.request.get("args"))
+        elif opcode == "read_msg_delivered":
+            result = self.db.fetch_messages_delivered(*self.request.get("args"))
+        elif opcode == "delete_msg":
+            result = self.db.delete_messages(*self.request.get("args"))
+        elif opcode == "send_msg":
+            # Check if receiver exists
+            if not self.db.account_exists(self.request.get("args")[1]):
+                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+                return result
+            # TODO: Check if receiver is online. verify sending
+            msg_sent = True
+            if not msg_sent:
+                result = {"status_code": ResponseCode.MESSAGE_SEND_FAILURE.value}
+                delivered = False
+            else:
+                delivered = True
+            # Insert message into database
+            timestamp = round(datetime.datetime.now().microsecond)
+            result = self.db.insert_message(*self.request.get("args"), timestamp, delivered)
+        elif opcode == "receive_msg":
+            pass
         else:
-            response = str(
-                dict(
-                    status="error",
-                    data="invalid opcode..."
-                )
-            )
-
-
-        # response = {
-        #     "content_bytes": b"First 10 bytes of request: "
-        #     + self.request[:10],
-        #     "content_type": "binary/custom-server-binary-type",
-        #     "content_encoding": "binary",
-        # }
+            pass
+        response = {"opcode": opcode, "result": result}
         return response
 
     def process_events(self, mask):
@@ -223,44 +152,30 @@ class Message:
             self.write()
 
     def read(self):
+        # Read in bytes
         self._read()
 
-        #TODO: Refactor. Simplify branching
-
+        # Decode protoheader: get request type
         if self._header_len is None:
             self.process_protoheader()
-        
-        # print(f"PROTO: {self.is_json} {self._header_len}")
-    
+            
+        # Decode header and content
         if self.is_json:
-            if self._header_len is not None:
-                if self._header is None:
-                    self.process_json_header()
+            if self._header_len is not None and self._header is None:
+                self.process_jsonheader()
             
-            # print(f"HEADER: {self._header}")
-
-            if self._header:
-                if self.request is None:
-                    self.process_json_request()
-            
-            # print(f"CONTENT: {self.request}")
+            if self._header and self.request is None:
+                self.process_json_request()
         else:
-            if self._header_len is not None:
-                if self._header is None:
-                    self.process_custom_header()
+            if self._header_len is not None and self._header is None:
+                self.process_custom_header()
             
-            # print(f"HEADER: {self._header}")
-
-            if self._header:
-                if self.request is None:
-                    self.process_custom_request()
+            if self._header and self.request is None:
+                self.process_custom_request()
             
-            # print(f"CONTENT: {self.request}")
-
     def write(self):
-        if self.request:
-            if not self.response_created:
-                self.create_response()
+        if self.request and not self.response_created:
+            self.create_response()
 
         self._write()
 
@@ -280,6 +195,11 @@ class Message:
             print(f"Error: socket.close() exception for {self.addr}: {e!r}")
         finally:
             # Delete reference to socket object for garbage collection
+            # NOTE: new
+            if hasattr(self, 'active_clients'):
+                for username, client_sock in list(self.active_clients.items()):
+                    if client_sock == self.sock:
+                        del self.active_clients[username]
             self.sock = None
 
     def process_protoheader(self):
@@ -290,8 +210,9 @@ class Message:
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
+        # TODO: handle is_json
 
-    def process_json_header(self):
+    def process_jsonheader(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
@@ -304,44 +225,42 @@ class Message:
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
-                
-    def process_custom_header(self):
-        pass
 
     def process_json_request(self):
-        #TODO: Refactor please. Get rid of outer conditional 
+        # Check if request is fully received
         content_len = self._header["content_length"]
-        if not len(self._recv_buffer) >= content_len:
+        if not len(self._recv_buffer) >= content_len: # TODO: exception
             return
+        
+        # Save data from receive buffer
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self._header["content_type"] == "json":
-            encoding = self._header["content_encoding"]
-            self.request = self._json_decode(data, encoding)
-            print(f"Received request {self.request!r} from {self.addr}")
-            print(f"Request type: {type(self.request)}")
-        else:
-            pass
-            # # Binary or unknown content-type
-            # self.request = data
-            # print(
-            #     f"Received {self._header['content-type']} "
-            #     f"request from {self.addr}"
-            # )
+
+        # Encode data as request
+        encoding = self._header["content_encoding"]
+        self.request = self._json_decode(data, encoding)
+        print(f"Received request {self.request!r} from {self.addr}")
+        print(f"Request type: {type(self.request)}")
+        
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
 
+    def process_custom_header(self):
+        pass
+    
     def process_custom_request(self):
         pass
 
     def create_response(self):
-        if self._header["content_type"] == "json": # TODO: maybe this field isn't needed, can rely on self.is_json
-            response = self._create_response_json_content()
+        # Create response
+        response = self._create_response_content()
+
+        # Encode response as json or custom
+        if self._header["content_type"] == "json": # NOTE: type may be a redundant field
+            message = self._create_json_message(response)
         else:
-            # Binary or unknown content-type
-            response = self._create_response_binary_content()
-        message = self._create_message(response)
+            message = self._create_custom_message(response)
+            
+        # Load send buffer
         self.response_created = True
         self._send_buffer += message
-
-        

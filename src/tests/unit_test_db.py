@@ -2,11 +2,11 @@ import unittest
 import sqlite3
 import sys
 import os
-
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from database import DatabaseHandler  # Assuming this is saved as database_handler.py
 from database_setup import database_setup
+from response_codes import ResponseCode
 
 class TestDatabaseHandler(unittest.TestCase):
     def setUp(self):
@@ -20,24 +20,24 @@ class TestDatabaseHandler(unittest.TestCase):
 
     def test_create_account(self):
         result = self.db.create_account("test_user", "password123")
-        self.assertEqual(result, ["Successfully created account"])
+        self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value)
         
         duplicate_result = self.db.create_account("test_user", "password123")
-        self.assertEqual(duplicate_result, ["Account already exists"])
+        self.assertEqual(duplicate_result["status_code"], ResponseCode.ACCOUNT_EXISTS.value)
 
     def test_login_account(self):
         self.db.create_account("test_user", "password123")
         result = self.db.login_account("test_user", "password123")
-        self.assertEqual(result[0], "Successfully logged in")
+        self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value)
 
         wrong_password = self.db.login_account("test_user", "wrongpassword")
-        self.assertEqual(wrong_password, ["Invalid credentials"])
+        self.assertEqual(wrong_password["status_code"], ResponseCode.INVALID_CREDENTIALS.value)
 
     def test_insert_message(self):
         self.db.create_account("sender_user", "password")
         self.db.create_account("receiver_user", "password")
         result = self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 0)
-        self.assertEqual(result, ["Successfully sent message"])
+        self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value) 
 
     def test_fetch_messages(self):
         self.db.create_account("sender_user", "password")
@@ -46,23 +46,24 @@ class TestDatabaseHandler(unittest.TestCase):
         self.db.insert_message("sender_user", "receiver_user", "How are you?", 1234567895, 0)
         
         result = self.db.fetch_messages("receiver_user", 2, False)
-        self.assertTrue("Successfully fetched last 2 unread messages" in result[0])
-        self.assertEqual(len(result) - 1, 2)  # 2 messages should be returned
+        self.assertTrue(result["status_code"], ResponseCode.SUCCESS.value)
+        self.assertEqual(len(result["data"].get("messages")), 2)  # 2 messages should be returned
 
     def test_count_messages(self):
         self.db.create_account("sender_user", "password")
         self.db.create_account("receiver_user", "password")
         self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 0)
         count = self.db.count_messages("receiver_user", False)
-        self.assertEqual(count, ["Successfully counted 1 unread messages", 1])
+        self.assertEqual(count["status_code"], ResponseCode.SUCCESS.value)
+        self.assertEqual(count["count"], 1)
 
     def test_delete_account(self):
         self.db.create_account("test_user", "password123")
         result = self.db.delete_account("test_user", "password123")
-        self.assertEqual(result, ["Successfully deleted account"])
+        self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value)
 
         non_existing = self.db.delete_account("fake_user", "password123")
-        self.assertEqual(non_existing, ["Account does not exist"])
+        self.assertEqual(non_existing["status_code"], ResponseCode.ACCOUNT_NOT_FOUND.value)
 
     def test_delete_messages(self):
         self.db.create_account("sender_user", "password")
@@ -72,7 +73,7 @@ class TestDatabaseHandler(unittest.TestCase):
         
         message_ids = [1, 2]
         result = self.db.delete_messages(message_ids)
-        self.assertEqual(result, ["Successfully deleted messages"])
+        self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value)
 
 if __name__ == '__main__':
     unittest.main()
