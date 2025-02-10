@@ -3,6 +3,7 @@ import json
 import selectors
 import struct
 import sys
+import tkinter as tk
 
 class Message:
     def __init__(self, selector, sock, addr, request):
