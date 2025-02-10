@@ -3,8 +3,8 @@ from enum import Enum
 from response_codes import ResponseCode
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from database_setup import database_setup
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.database_setup import database_setup
 
 # TODO: for all, return status + fetches
 # TODO: catch exceptions
@@ -13,7 +13,7 @@ from database_setup import database_setup
 class DatabaseHandler():
     def __init__(self):
         try:
-            self.conn = sqlite3.connect("messages.db")
+            self.conn = sqlite3.connect("../messages.db")
             self.cursor = self.conn.cursor()
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
@@ -153,7 +153,7 @@ class DatabaseHandler():
     
     def close(self):
         self.conn.close()
-        os.remove("messages.db")
+        os.remove("../messages.db")
 
 # database_setup()
 # DB = DatabaseHandler()

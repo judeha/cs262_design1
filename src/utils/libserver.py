@@ -7,7 +7,10 @@ import ast
 import datetime
 from enum import Enum
 from response_codes import ResponseCode
-from database import DatabaseHandler
+# import os
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# from src.utils.database import DatabaseHandler
+from utils.database import DatabaseHandler
 
 version = 1
 

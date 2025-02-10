@@ -3,7 +3,7 @@ import socket
 import sys
 import ast
 import traceback
-import libclient
+from utils import libclient
 import tkinter as tk
 import threading
 

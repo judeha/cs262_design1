@@ -4,8 +4,8 @@ import sys
 import os
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from database import DatabaseHandler  # Assuming this is saved as database_handler.py
-from database_setup import database_setup
+from utils.database import DatabaseHandler  # Assuming this is saved as database_handler.py
+from utils.database_setup import database_setup
 from response_codes import ResponseCode
 
 class TestDatabaseHandler(unittest.TestCase):
