@@ -44,9 +44,6 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
-    def update_account(self, username, password):
-        pass
-
     def delete_account(self, username, password):
         try:
             # Check if account exists
@@ -67,6 +64,7 @@ class DatabaseHandler():
             messages = self.cursor.fetchall()
             # Count unread messages
             count = self.count_messages(username, False)
+            assert(count != -1)
             return {"status_code": ResponseCode.SUCCESS.value, "data": {"messages": messages, "count": count}}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
@@ -80,16 +78,6 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
         
-    def account_exists(self, username):
-        try:
-            # Check if account exists
-            match_check = self.cursor.execute("SELECT EXISTS(SELECT 1 FROM accounts WHERE username=?)", (username,))
-            if not match_check.fetchone()[0]:
-                return False
-            return True
-        except sqlite3.Error as e:
-            return {"status_code": ResponseCode.DATABASE_ERROR.value}
-
     def insert_message(self, sender, receiver, content, timestamp, delivered):
         # TODO: in caller: handle timestamp
         # TODO: in caller: send to client
@@ -116,15 +104,6 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
         # TODO: handle nonexistent ids?
-
-    def count_messages(self, username, delivered: bool):
-        try:
-            # Count messages to reciever of type delivered or undelivered
-            self.cursor.execute("SELECT COUNT(*) FROM messages WHERE receiver=? AND delivered=?", (username, delivered))
-            count = self.cursor.fetchone()[0]
-            return {"status_code": ResponseCode.SUCCESS.value, "count": count}
-        except sqlite3.Error as e:
-            return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
     def fetch_messages_delivered(self, username, n: int): 
         try:
@@ -153,7 +132,25 @@ class DatabaseHandler():
             return self.fetch_homepage(username)
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
-
+    
+    def count_messages(self, username, delivered: bool):
+        try:
+            # Count messages to reciever of type delivered or undelivered
+            self.cursor.execute("SELECT COUNT(*) FROM messages WHERE receiver=? AND delivered=?", (username, delivered))
+            count = self.cursor.fetchone()[0]
+            return count
+        except sqlite3.Error as e:
+            return -1
+    
+    def account_exists(self, username):
+        try:
+            # Check if account exists
+            self.cursor.execute("SELECT * FROM accounts WHERE username=?", (username,))
+            user = self.cursor.fetchone()
+            return user is not None
+        except sqlite3.Error as e:
+            return -1
+    
     def close(self):
         self.conn.close()
         os.remove("messages.db")

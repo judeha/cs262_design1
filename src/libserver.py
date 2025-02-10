@@ -20,9 +20,9 @@ class Message:
         self._header = None
         self.request = None
         self.response_created = False
-        self.is_json = True
         self.db = DatabaseHandler() # TODO: should we move this outside?
         self.active_clients = {} # TODO: in-session tracking improved?
+        self.is_json = True
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -83,18 +83,24 @@ class Message:
         return obj.decode(encoding)
         pass
 
-    def _create_message(
+    def _create_json_message(
         self, response
     ):
+        # Encode content
         content_bytes = self._json_encode(response, self._header["content_encoding"])
+        # Encode header
         jsonheader = self._header
         jsonheader["content_length"] = len(content_bytes)
         jsonheader_bytes = self._json_encode(jsonheader, self._header["content_encoding"])
+        # Encode protoheader and package message
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
-    def _create_response_json_content(self):
+    def _create_custom_message(self, response):
+        pass
+
+    def _create_response_content(self):
         # TODO: catch input exceptions here
         opcode = self.request.get("opcode")
         if opcode == "create_account":
@@ -139,9 +145,6 @@ class Message:
         response = {"opcode": opcode, "result": result}
         return response
 
-    def _create_response_binary_content(self):
-       pass
-
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
             self.read()
@@ -149,44 +152,30 @@ class Message:
             self.write()
 
     def read(self):
+        # Read in bytes
         self._read()
 
-        #TODO: Refactor. Simplify branching
-
+        # Decode protoheader: get request type
         if self._header_len is None:
             self.process_protoheader()
-        
-        # print(f"PROTO: {self.is_json} {self._header_len}")
-    
+            
+        # Decode header and content
         if self.is_json:
-            if self._header_len is not None:
-                if self._header is None:
-                    self.process_json_header()
+            if self._header_len is not None and self._header is None:
+                self.process_jsonheader()
             
-            # print(f"HEADER: {self._header}")
-
-            if self._header:
-                if self.request is None:
-                    self.process_json_request()
-            
-            # print(f"CONTENT: {self.request}")
+            if self._header and self.request is None:
+                self.process_json_request()
         else:
-            if self._header_len is not None:
-                if self._header is None:
-                    self.process_custom_header()
+            if self._header_len is not None and self._header is None:
+                self.process_custom_header()
             
-            # print(f"HEADER: {self._header}")
-
-            if self._header:
-                if self.request is None:
-                    self.process_custom_request()
+            if self._header and self.request is None:
+                self.process_custom_request()
             
-            # print(f"CONTENT: {self.request}")
-
     def write(self):
-        if self.request:
-            if not self.response_created:
-                self.create_response()
+        if self.request and not self.response_created:
+            self.create_response()
 
         self._write()
 
@@ -221,8 +210,9 @@ class Message:
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
+        # TODO: handle is_json
 
-    def process_json_header(self):
+    def process_jsonheader(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
@@ -235,44 +225,42 @@ class Message:
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
-                
-    def process_custom_header(self):
-        pass
 
     def process_json_request(self):
-        #TODO: Refactor please. Get rid of outer conditional 
+        # Check if request is fully received
         content_len = self._header["content_length"]
-        if not len(self._recv_buffer) >= content_len:
+        if not len(self._recv_buffer) >= content_len: # TODO: exception
             return
+        
+        # Save data from receive buffer
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self._header["content_type"] == "json":
-            encoding = self._header["content_encoding"]
-            self.request = self._json_decode(data, encoding)
-            print(f"Received request {self.request!r} from {self.addr}")
-            print(f"Request type: {type(self.request)}")
-        else:
-            pass
-            # # Binary or unknown content-type
-            # self.request = data
-            # print(
-            #     f"Received {self._header['content-type']} "
-            #     f"request from {self.addr}"
-            # )
+
+        # Encode data as request
+        encoding = self._header["content_encoding"]
+        self.request = self._json_decode(data, encoding)
+        print(f"Received request {self.request!r} from {self.addr}")
+        print(f"Request type: {type(self.request)}")
+        
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
 
+    def process_custom_header(self):
+        pass
+    
     def process_custom_request(self):
         pass
 
     def create_response(self):
-        if self._header["content_type"] == "json": # TODO: maybe this field isn't needed, can rely on self.is_json
-            response = self._create_response_json_content()
+        # Create response
+        response = self._create_response_content()
+
+        # Encode response as json or custom
+        if self._header["content_type"] == "json": # NOTE: type may be a redundant field
+            message = self._create_json_message(response)
         else:
-            # Binary or unknown content-type
-            response = self._create_response_binary_content()
-        message = self._create_message(response)
+            message = self._create_custom_message(response)
+            
+        # Load send buffer
         self.response_created = True
         self._send_buffer += message
-
-        

@@ -5,6 +5,36 @@ import struct
 import sys
 from response_codes import ResponseCode, RESPONSE_MESSAGES  
 
+"""
+Request packaged as a message:
+protoheader: 00 (length) + 01 (type)
+jsonheader: {
+    "byteorder": "big",
+    "content_type": "json",
+    "content_encoding": "utf-8",
+    "content_length": 123
+}
+content: {
+    "opcode": "create_account",
+    "args": ["test_user", "password123"]
+}
+
+Response packaged as a message:
+protoheader: 00 (length) + 01 (type)
+jsonheader: {
+    "byteorder": "big",
+    "content_type": "json",
+    "content_encoding": "utf-8",
+    "content_length": 123
+}
+content: {
+    "opcode": "create_account",
+    "result": {
+        "status_code": 0,
+        "data": {"field": "value"}
+    }
+}
+"""
 class Message:
     def __init__(self, selector, sock, addr, request):
         self.selector = selector
@@ -14,9 +44,10 @@ class Message:
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
-        self._jsonheader_len = None
-        self.jsonheader = None
+        self._header_len = None
+        self._header = None
         self.response = None
+        self.is_json = True
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -66,10 +97,17 @@ class Message:
         tiow.close()
         return obj
 
-    def _create_message(
+    def _custom_encode(self, obj, encoding):
+        pass
+
+    def _custom_decode(self, obj, encoding):
+        pass
+
+    def _create_json_message(
         self, req):
         # Encode content
         content_bytes = self._json_encode(req["content"], req["content_encoding"])
+        # Encode header
         jsonheader = {
             "byteorder": sys.byteorder,
             "content_type": req['content_type'],
@@ -77,11 +115,15 @@ class Message:
             "content_length": len(content_bytes),
         }
         jsonheader_bytes = self._json_encode(jsonheader, req["content_encoding"])
+        # Encode protoheader and pakcage message
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
-    def _process_response_json_content(self):
+    def _create_custom_message(self, req):
+        pass
+    
+    def _process_response_content(self):
         content = self.response
         opcode = content.get("opcode")
         status_code = content['result'].get("status_code")
@@ -127,10 +169,6 @@ class Message:
             else:
                 print("Unknown opcode")
 
-    def _process_response_binary_content(self):
-        content = self.response
-        print(f"Got response: {content!r}")
-
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
             self.read()
@@ -140,16 +178,21 @@ class Message:
     def read(self):
         self._read()
 
-        if self._jsonheader_len is None:
+        # Decode protoheader: get request type
+        if self._header_len is None:
             self.process_protoheader()
 
-        if self._jsonheader_len is not None:
-            if self.jsonheader is None:
-                self.process_jsonheader()
+        # Decode header
+        if self.is_json:
+            if self._header_len is not None and self._header is None:
+                self.process_json_header()
+        else:
+            if self._header_len is not None and self._header is None:
+                self.process_custom_header()
 
-        if self.jsonheader:
-            if self.response is None:
-                self.process_response()
+        # Decode content 
+        if self._header and self.response is None:
+            self.process_response()
 
     def write(self):
         if not self._request_queued:
@@ -157,10 +200,9 @@ class Message:
 
         self._write()
 
-        if self._request_queued:
-            if not self._send_buffer:
-                # Set selector to listen for read events, we're done writing.
-                self._set_selector_events_mask("r")
+        if self._request_queued and not self._send_buffer:
+            # Set selector to listen for read events, we're done writing.
+            self._set_selector_events_mask("r") # TODO: why doesn't this keep the connection open?
 
     def close(self):
         print(f"Closing connection to {self.addr}")
@@ -180,25 +222,20 @@ class Message:
             # Delete reference to socket object for garbage collection
             self.sock = None
 
-    def queue_request(self):
-        print("PRE REQUEST", self.request)
-        message = self._create_message(self.request)
-        print("POST REQUEST", message)
-        self._send_buffer += message
-        self._request_queued = True
-
     def process_protoheader(self):
         hdrlen = 2
         if len(self._recv_buffer) >= hdrlen:
-            self._jsonheader_len = struct.unpack(
+            self._header_len = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
+        # TODO: handle is_json
+        self.is_json = True
 
-    def process_jsonheader(self):
-        hdrlen = self._jsonheader_len
+    def process_json_header(self):
+        hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
-            self.jsonheader = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
+            self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 "byteorder",
@@ -206,28 +243,39 @@ class Message:
                 "content_type",
                 "content_encoding",
             ):
-                if reqhdr not in self.jsonheader:
+                if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
 
     def process_response(self):
-        content_len = self.jsonheader["content_length"]
-        if not len(self._recv_buffer) >= content_len:
+        # Check if request is fully received
+        content_len = self._header["content_length"]
+        if not len(self._recv_buffer) >= content_len: # TODO: exception
             return
+        
+        # Save data from receive buffer
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
-        if self.jsonheader["content_type"] == "json":
-            encoding = self.jsonheader["content_encoding"]
+
+        # Decode response data
+        if self._header["content_type"] == "json":
+            encoding = self._header["content_encoding"]
             self.response = self._json_decode(data, encoding)
-            print(f"Received response {self.response!r} from {self.addr}")
-            self._process_response_json_content()
         else:
-            pass
-            # # Binary or unknown content-type
-            # self.response = data
-            # print(
-            #     f"Received {self.jsonheader['content-type']} "
-            #     f"response from {self.addr}"
-            # )
-            # self._process_response_binary_content()
+            self.response = self._custom_decode(data, encoding)
+        print(f"Received response {self.response!r} from {self.addr}")
+
+        # Process response content
+        self._process_response_content()
+
         # Close when response has been processed
         self.close()
+
+    def queue_request(self):
+        # print("PRE REQUEST", self.request)
+        if self.is_json:
+            message = self._create_json_message(self.request)
+        else:
+            message = self._create_custom_message(self.request)
+        # print("POST REQUEST", message)
+        self._send_buffer += message
+        self._request_queued = True
