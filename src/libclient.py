@@ -4,16 +4,16 @@ import selectors
 import struct
 import sys
 import tkinter
-import yaml
+# import yaml
 from codes import ResponseCode, RESPONSE_MESSAGES, OpCode, OPCODE_MESSAGES 
 
-# Read config file
-yaml_path = "config.yaml"
-with open(yaml_path) as y:
-    config_dict = yaml.safe_load(y)
-version = config_dict["version"]
-key = config_dict["key"]
-db_path = config_dict["db_path"]
+# # Read config file
+# yaml_path = "config.yaml"
+# with open(yaml_path) as y:
+#     config_dict = yaml.safe_load(y)
+# version = config_dict["version"]
+# key = config_dict["key"]
+# db_path = config_dict["db_path"]
 
 class Message:
     def __init__(self, selector, sock, addr, request):
