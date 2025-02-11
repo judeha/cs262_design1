@@ -3,22 +3,31 @@ import json
 import selectors
 import struct
 import sys
-from response_codes import ResponseCode, RESPONSE_MESSAGES  
+import ast
+import datetime
+from enum import Enum
+from codes import ResponseCode
+# import os
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# from src.utils.database import DatabaseHandler
+from database import DatabaseHandler
 
-version = 1 # TODO: put in config file, change from >H if float
+version = 1
 
 class Message:
-    def __init__(self, selector, sock, addr, request):
+    def __init__(self, selector, sock, addr, db_path="messages.db"):
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = request
         self._recv_buffer = b""
         self._send_buffer = b""
-        self._request_queued = False
         self._header_len = None
         self._header = None
-        self.response = None
+        self.request = None
+        self.response_created = False
+        self.db = DatabaseHandler(db_path) # TODO: should we move this outside?
+        self.active_clients = {} # TODO: in-session tracking improved?
+        self.is_custom = False
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -56,6 +65,10 @@ class Message:
                 pass
             else:
                 self._send_buffer = self._send_buffer[sent:]
+                # Close when the buffer is drained. The response has been sent.
+                if sent and not self._send_buffer:
+                    pass 
+                    # self.close()
 
     def _json_encode(self, obj, encoding):
         return json.dumps(obj, ensure_ascii=False).encode(encoding)
@@ -68,94 +81,84 @@ class Message:
         tiow.close()
         return obj
 
-    def _package_request(
-        self, req):
+    def _package_response(
+        self, response
+    ):
         # Encode content
-        encoding = req["content_encoding"]
-        content_bytes = self._json_encode(req["content"], encoding)
+        content_bytes = self._json_encode(response, self._header["content_encoding"])
         # Encode header
-        jsonheader = {
-            # "byteorder": sys.byteorder,
-            # "content_type": req['content_type'],
-            "content_encoding": encoding,
-            "content_length": len(content_bytes),
-            "opcode": req["opcode"]
-        }
-        jsonheader_bytes = self._json_encode(jsonheader, encoding)
+        jsonheader = self._header
+        jsonheader["content_length"] = len(content_bytes)
+        jsonheader_bytes = self._json_encode(jsonheader, self._header["content_encoding"])
         # Encode protoheader and package message
-        message_hdr = struct.pack(">H", version) + struct.pack(">H", len(jsonheader_bytes))
+        message_hdr = struct.pack(">H",version) + struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
-    
-    def _process_response(self):
-        # Check if request is fully received
-        content_len = self._header["content_length"]
-        if not len(self._recv_buffer) >= content_len: # TODO: exception
-            return
+
+    def _process_request(self):
+        # Create response
+        result = self._generate_response()
+
+        # Encode response as json or custom
+        status_code, data = result
+        response = {"status_code": status_code, "data": data}
+        message = self._package_response(response)
+        # else:
+        #     message = self._create_custom_message(response)
+            
+        # Load send buffer
+        self.response_created = True
+        self._send_buffer += message
         
-        # Save data from receive buffer
-        data = self._recv_buffer[:content_len]
-        self._recv_buffer = self._recv_buffer[content_len:]
-
-        # Decode response data
-        encoding = self._header["content_encoding"]
-        self.response = self._json_decode(data, encoding)
-        print(f"Received response {self.response!r} from {self.addr}")
-
-        # Process response content
-        self._generate_action()
-
-        # Close when response has been processed
-        self.close()
-
-    def _generate_action(self):
-        # Get opcode, status code, and data from self._header and self.response
-        opcode = self._header.get("opcode")
-        status_code = self.response.get("status_code")
-        data = self.response.get("data")
-
-        # TODO: enforce I/O
-        print(RESPONSE_MESSAGES.get(ResponseCode(status_code), "Unknown response code"))
-        if status_code != ResponseCode.SUCCESS.value:
-            pass
-            # TODO: stay on the page
-        else:
-            if opcode == "create_account":
+    def _generate_response(self):
+        args = self.request.get("args")
+        # TODO: catch input exceptions here
+        opcode = self._header["opcode"]
+        if opcode == "check_username":
+            result = self.db.account_exists(*args)
+            if result:
+                result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value}
+        elif opcode == "create_account":
+            result = self.db.create_account(*args)
+        elif opcode == "login_account":
+            result = self.db.login_account(*args)
+            # Add to active clients
+            if result["status_code"] == ResponseCode.SUCCESS.value:
                 pass
-                # TODO: display login page
-            elif opcode == "login_account":
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == "delete_account":
-                pass
-                # TODO: display create account page
-            elif opcode == "read_msg_delivered":
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == "read_msg_undelivered":
-                print("Here are your messages: ", data[1])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == "delete_msg":
-                pass
-                # TODO: display homepage
-            elif opcode == "list_all_accounts":
-                print("Here are all the accounts: ", [data])
-                # TODO: display accounts
-            elif opcode == "homepage":
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == "send_msg":
-                pass
-                # TODO: display homepage
-            elif opcode == "receive_msg":
-                print("You have a new message. Here are your messages: ", data)
-                # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
+                # self.active_clients[result["data"]["username"]] = self.sock
+        elif opcode == "list_accounts":
+            result = self.db.list_accounts()
+        elif opcode == "delete_account":
+            result = self.db.delete_account(*args)
+        elif opcode == "homepage":
+            result = self.db.fetch_homepage(*args)
+        elif opcode == "read_msg_undelivered":
+            result = self.db.fetch_messages_undelivered(*args)
+        elif opcode == "read_msg_delivered":
+            result = self.db.fetch_messages_delivered(*args)
+        elif opcode == "delete_msg":
+            result = self.db.delete_messages(*args)
+        elif opcode == "send_msg":
+            # Check if receiver exists
+            if not self.db.account_exists(args[1]):
+                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+                return result
+            # TODO: Check if receiver is online. verify sending
+            msg_sent = True
+            if not msg_sent:
+                result = {"status_code": ResponseCode.MESSAGE_SEND_FAILURE.value}
+                delivered = False
             else:
-                print("Unknown opcode")
+                delivered = True
+            # Insert message into database
+            timestamp = round(datetime.datetime.now().microsecond)
+            result = self.db.insert_message(*self.request, timestamp, delivered)
+        elif opcode == "receive_msg":
+            pass
+        else:
+            pass
+        response = result["status_code"], result.get("data", [])
+        return response
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -164,28 +167,25 @@ class Message:
             self.write()
 
     def read(self):
+        # Read in bytes
         self._read()
 
         # Decode protoheader: get request type
         if self._header_len is None:
             self.process_protoheader()
-
+            
         # Decode header and content
         if self._header_len is not None and self._header is None:
             self.process_header()
-
-        if self._header and self.response is None:
+        
+        if self._header and self.request is None:
             self.process_content()
-
+            
     def write(self):
-        if not self._request_queued:
-            self.queue_request()
+        if self.request and not self.response_created:
+            self._process_request()
 
         self._write()
-
-        if self._request_queued and not self._send_buffer:
-            # Set selector to listen for read events, we're done writing.
-            self._set_selector_events_mask("r") # TODO: why doesn't this keep the connection open?
 
     def close(self):
         print(f"Closing connection to {self.addr}")
@@ -203,16 +203,17 @@ class Message:
             print(f"Error: socket.close() exception for {self.addr}: {e!r}")
         finally:
             # Delete reference to socket object for garbage collection
+            # NOTE: new
+            if hasattr(self, 'active_clients'):
+                for username, client_sock in list(self.active_clients.items()):
+                    if client_sock == self.sock:
+                        del self.active_clients[username]
             self.sock = None
 
-    def queue_request(self):
-        message = self._package_request(self.request)
-        self._send_buffer += message
-        self._request_queued = True
-        
     def process_protoheader(self):
+        # Get header length
         hdrlen = 2
-        
+                
         if len(self._recv_buffer) >= hdrlen:
             v = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
@@ -220,7 +221,6 @@ class Message:
             if v != version: 
                 raise ValueError(f"Unsupported version: {v}")
             self._recv_buffer = self._recv_buffer[hdrlen:]
-
 
         if len(self._recv_buffer) >= hdrlen:
             self._header_len = struct.unpack(
@@ -235,14 +235,14 @@ class Message:
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 # "byteorder",
-                "content_length",
                 # "content_type",
                 "content_encoding",
+                "content_length",
                 "opcode"
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
-                
+
     def process_content(self):
         # Check if request is fully received
         content_len = self._header["content_length"]
@@ -253,13 +253,11 @@ class Message:
         data = self._recv_buffer[:content_len]
         self._recv_buffer = self._recv_buffer[content_len:]
 
-        # Decode response data
+        # Encode data as request
         encoding = self._header["content_encoding"]
-        self.response = self._json_decode(data, encoding)
-        print(f"Received response {self.response!r} from {self.addr}")
-
-        # Process response content
-        self._process_response()
-
-        # Close when response has been processed
-        self.close()
+        self.request = self._json_decode(data, encoding)
+        print(f"Received request {self.request!r} from {self.addr}")
+        print(f"Request type: {type(self.request)}")
+        
+        # Set selector to listen for write events, we're done reading.
+        self._set_selector_events_mask("w")

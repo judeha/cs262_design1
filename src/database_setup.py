@@ -1,8 +1,8 @@
 import sqlite3
 
 # Connect to an SQLite database (or create it if it doesn't exist)
-def database_setup():
-    conn = sqlite3.connect('messages.db')
+def database_setup(db_path):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     # Create table

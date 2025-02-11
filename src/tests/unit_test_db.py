@@ -4,15 +4,18 @@ import sys
 import os
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.database import DatabaseHandler  # Assuming this is saved as database_handler.py
-from utils.database_setup import database_setup
-from response_codes import ResponseCode
+from database import DatabaseHandler  # Assuming this is saved as database_handler.py
+from database_setup import database_setup
+from codes import ResponseCode
+
+
+db_path = "messages.db"
 
 class TestDatabaseHandler(unittest.TestCase):
     def setUp(self):
         # Initialize test database
-        database_setup()
-        self.db = DatabaseHandler()
+        database_setup(db_path)
+        self.db = DatabaseHandler(db_path)
 
     def tearDown(self):
         os.remove("messages.db")
@@ -39,23 +42,36 @@ class TestDatabaseHandler(unittest.TestCase):
         result = self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 0)
         self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value) 
 
-    def test_fetch_messages(self):
+    def test_fetch_messages_undelivered(self):
         self.db.create_account("sender_user", "password")
         self.db.create_account("receiver_user", "password")
         self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 0)
         self.db.insert_message("sender_user", "receiver_user", "How are you?", 1234567895, 0)
         
-        result = self.db.fetch_messages("receiver_user", 2, False)
+        result = self.db.fetch_messages_undelivered("receiver_user", 2)
         self.assertTrue(result["status_code"], ResponseCode.SUCCESS.value)
-        self.assertEqual(len(result["data"].get("messages")), 2)  # 2 messages should be returned
+        self.assertTrue(result["data"][0] == 0)  # 0 unread messages should be returned
+        self.assertEqual(len(result["data"][1:]), 2)  # 2 messages should be returned
+        self.assertEqual(result["data"][1][1], "sender_user")
+
+    def test_fetch_messages_delivered(self):
+        self.db.create_account("sender_user", "password")
+        self.db.create_account("receiver_user", "password")
+        self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 1)
+        self.db.insert_message("sender_user", "receiver_user", "How are you?", 1234567895, 0)
+        
+        result = self.db.fetch_messages_delivered("receiver_user", 2)
+        self.assertTrue(result["status_code"], ResponseCode.SUCCESS.value)
+        self.assertTrue(len(result["data"]) == 1)  # 1 read message should be returned
+        self.assertEqual(result["data"][0][0], 1)  # 2 messages should be returned
+        self.assertEqual(result["data"][0][1], "sender_user")
 
     def test_count_messages(self):
         self.db.create_account("sender_user", "password")
         self.db.create_account("receiver_user", "password")
         self.db.insert_message("sender_user", "receiver_user", "Hello!", 1234567890, 0)
         count = self.db.count_messages("receiver_user", False)
-        self.assertEqual(count["status_code"], ResponseCode.SUCCESS.value)
-        self.assertEqual(count["count"], 1)
+        self.assertEqual(count, 1)
 
     def test_delete_account(self):
         self.db.create_account("test_user", "password123")
@@ -72,7 +88,7 @@ class TestDatabaseHandler(unittest.TestCase):
         self.db.insert_message("sender_user", "receiver_user", "How are you?", 1234567895, 0)
         
         message_ids = [1, 2]
-        result = self.db.delete_messages(message_ids)
+        result = self.db.delete_messages("sender_user", message_ids)
         self.assertEqual(result["status_code"], ResponseCode.SUCCESS.value)
 
 if __name__ == '__main__':

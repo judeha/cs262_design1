@@ -22,7 +22,7 @@ def _package_request(
 def _process_response_content(self):
     # Get opcode, status_code, and data from self._header and self.response
     opcode = self._header.get("opcode")
-    status_code = self.response.pop()
+    status_code = self.response.pop(0)
     data = self.response
     pass
 

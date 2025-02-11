@@ -3,14 +3,15 @@ import socket
 import sys
 import traceback
 
-from utils import libserver
+import libserver
 
 from pymongo import MongoClient
 from datetime import datetime
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.utils.database_setup import database_setup
+from database_setup import database_setup
 
+db_path = "messages.db"
 
 sel = selectors.DefaultSelector()
 
@@ -26,7 +27,7 @@ if len(sys.argv) != 3:
     print(f"Usage: {sys.argv[0]} <host> <port>")
     sys.exit(1)
 
-database_setup()
+database_setup(db_path)
 
 host, port = sys.argv[1], int(sys.argv[2])
 lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
