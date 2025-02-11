@@ -7,11 +7,13 @@ class ResponseCode(Enum):
     ACCOUNT_NOT_FOUND = 4041
     MESSAGE_SEND_FAILURE = 5001
     DATABASE_ERROR = 5000
+    BAD_REQUEST = 4000
 
 RESPONSE_MESSAGES = {
     ResponseCode.SUCCESS: "Operation successful",
     ResponseCode.ACCOUNT_EXISTS: "Account already exists",
     ResponseCode.INVALID_CREDENTIALS: "Invalid credentials",
+    ResponseCode.BAD_REQUEST: "Bad request",
     ResponseCode.ACCOUNT_NOT_FOUND: "Account does not exist",
     ResponseCode.MESSAGE_SEND_FAILURE: "Failed to send message",
     ResponseCode.DATABASE_ERROR: "Database error",

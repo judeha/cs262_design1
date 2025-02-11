@@ -1,3 +1,9 @@
 version: 1
 key: 0
 db_path: "messages.db"
+min_username_len: 1
+max_username_len: 100
+min_password_len: 1
+max_password_len: 100
+min_message_len: 1
+max_message_len: 4000
