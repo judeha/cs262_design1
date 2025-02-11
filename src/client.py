@@ -6,6 +6,9 @@ import traceback
 import libclient
 import tkinter as tk
 import threading
+from utils import libclient
+from client_ui import Interface as UI
+
 
 sel = selectors.DefaultSelector()
 
@@ -28,33 +31,40 @@ def start_connection(host, port, request):
     message = libclient.Message(sel, sock, addr, request)
     sel.register(sock, events, data=message)
 
-if len(sys.argv) != 5:
-    print(f"Usage: {sys.argv[0]} <host> <port> <action> <value>")
+if len(sys.argv) != 3:
+    print(f"Usage: {sys.argv[0]} <host> <port>")
     sys.exit(1)
 
 host, port = sys.argv[1], int(sys.argv[2])
-action, args = sys.argv[3], sys.argv[4]
-args = ast.literal_eval(args)
-request = create_request(action, args)
-start_connection(host, port, request)
+# action, args = sys.argv[3], sys.argv[4]
+# args = ast.literal_eval(args)
+# request = create_request(action, args)
+# start_connection(host, port, request)
 
-try:
-    while True:
-        events = sel.select(timeout=1)
-        for key, mask in events:
-            message = key.data
-            try:
-                message.process_events(mask)
-            except Exception:
-                print(
-                    f"Main: Error: Exception for {message.addr}:\n"
-                    f"{traceback.format_exc()}"
-                )
-                message.close()
-        # Check for a socket being monitored to continue.
-        if not sel.get_map():
-            break
-except KeyboardInterrupt:
-    print("Caught keyboard interrupt, exiting")
-finally:
-    sel.close()
+
+if __name__ == "__main__":
+    #Start the GUI 
+    ui = UI()
+    ui.root.mainloop()
+
+    #Open the socket connection 
+    try:
+        while True:
+            events = sel.select(timeout=1)
+            for key, mask in events: 
+                message = key.data 
+                try:
+                    message.process_events(mask)
+                except Exception:
+                    print(
+                        f"Main: Error: Exception for {message.addr}:\n"
+                        f"{traceback.format_exc()}"
+                    )
+                    message.close()
+            # Check for a socket being monitored to continue.
+            if not sel.get_map():
+                break
+    except KeyboardInterrupt:
+        print("Caught keyboard interrupt, exiting")
+    finally:
+        sel.close()

@@ -3,6 +3,7 @@ import json
 import selectors
 import struct
 import sys
+import tkinter
 from codes import ResponseCode, RESPONSE_MESSAGES  
 
 version = 1 # TODO: put in config file, change from >H if float
@@ -110,9 +111,19 @@ class Message:
 
     def _generate_action(self):
         # Get opcode, status code, and data from self._header and self.response
+        import client
+
+        print("in generate action")
+
         opcode = self._header.get("opcode")
         status_code = self.response.get("status_code")
         data = self.response.get("data")
+
+        if True: 
+            client.create_account_frame()
+        else: 
+            client.create_login_frame() 
+        
 
         # TODO: enforce I/O
         print(RESPONSE_MESSAGES.get(ResponseCode(status_code), "Unknown response code"))
@@ -120,7 +131,12 @@ class Message:
             pass
             # TODO: stay on the page
         else:
-            if opcode == "create_account":
+            if opcode == "check_username":
+                client.create_account_frame()
+                if status_code == ResponseCode.SUCCESS.value: 
+                    client.create_login_frame() 
+
+            elif opcode == "create_account":
                 pass
                 # TODO: display login page
             elif opcode == "login_account":
