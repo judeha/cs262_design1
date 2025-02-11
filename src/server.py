@@ -3,13 +3,13 @@ import socket
 import sys
 import traceback
 
-import libserver
+from utils import libserver
 
 from pymongo import MongoClient
 from datetime import datetime
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from database_setup import database_setup
+from src.utils.database_setup import database_setup
 
 
 sel = selectors.DefaultSelector()

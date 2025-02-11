@@ -3,7 +3,7 @@ import socket
 import sys
 import ast
 import traceback
-import libclient
+from utils import libclient
 import tkinter as tk
 import threading
 import ui_client
@@ -12,10 +12,11 @@ sel = selectors.DefaultSelector()
 
 def create_request(opcode, args):
     return dict(
-        byteorder = sys.byteorder,
-        content_type="json",
+        # byteorder = sys.byteorder,
+        # content_type="json",
         content_encoding="utf-8",
-        content={'opcode':opcode,'args':args},
+        opcode = opcode,
+        content={"args": args},
     )
 
 def start_connection(host, port, request):

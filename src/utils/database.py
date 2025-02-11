@@ -3,8 +3,8 @@ from enum import Enum
 from response_codes import ResponseCode
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from database_setup import database_setup
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.database_setup import database_setup
 
 # TODO: for all, return status + fetches
 # TODO: catch exceptions
@@ -13,7 +13,7 @@ from database_setup import database_setup
 class DatabaseHandler():
     def __init__(self):
         try:
-            self.conn = sqlite3.connect("messages.db")
+            self.conn = sqlite3.connect("../messages.db")
             self.cursor = self.conn.cursor()
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
@@ -65,7 +65,7 @@ class DatabaseHandler():
             # Count unread messages
             count = self.count_messages(username, False)
             assert(count != -1)
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"messages": messages, "count": count}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": [count] + messages}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
@@ -74,7 +74,7 @@ class DatabaseHandler():
             # Fetch all accounts
             self.cursor.execute("SELECT * FROM accounts")
             accounts = self.cursor.fetchall()
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"accounts": accounts}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
         
@@ -111,7 +111,7 @@ class DatabaseHandler():
             self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?",
                                 (username, n))
             messages = self.cursor.fetchall()
-            return {"status_code": ResponseCode.SUCCESS.value, "data": {"messages": messages}}
+            return {"status_code": ResponseCode.SUCCESS.value, "data": messages}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
     
@@ -153,7 +153,7 @@ class DatabaseHandler():
     
     def close(self):
         self.conn.close()
-        os.remove("messages.db")
+        os.remove("../messages.db")
 
 # database_setup()
 # DB = DatabaseHandler()

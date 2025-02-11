@@ -7,7 +7,12 @@ import ast
 import datetime
 from enum import Enum
 from response_codes import ResponseCode
-from database import DatabaseHandler
+# import os
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# from src.utils.database import DatabaseHandler
+from utils.database import DatabaseHandler
+
+version = 1
 
 class Message:
     def __init__(self, selector, sock, addr):
@@ -22,7 +27,7 @@ class Message:
         self.response_created = False
         self.db = DatabaseHandler() # TODO: should we move this outside?
         self.active_clients = {} # TODO: in-session tracking improved?
-        self.is_json = True
+        self.is_custom = False
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -75,15 +80,7 @@ class Message:
         tiow.close()
         return obj
 
-    def _custom_encode(self, obj, encoding):
-        #TODO encode the custom action to send to tkinter...
-        pass
-
-    def _custom_decode(self, obj, encoding):
-        return obj.decode(encoding)
-        pass
-
-    def _create_json_message(
+    def _package_response(
         self, response
     ):
         # Encode content
@@ -93,20 +90,33 @@ class Message:
         jsonheader["content_length"] = len(content_bytes)
         jsonheader_bytes = self._json_encode(jsonheader, self._header["content_encoding"])
         # Encode protoheader and package message
-        message_hdr = struct.pack(">H", len(jsonheader_bytes))
+        message_hdr = struct.pack(">H",version) + struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
 
-    def _create_custom_message(self, response):
-        pass
+    def _process_request(self):
+        # Create response
+        result = self._generate_response()
 
-    def _create_response_content(self):
+        # Encode response as json or custom
+        status_code, data = result
+        response = {"status_code": status_code, "data": data}
+        message = self._package_response(response)
+        # else:
+        #     message = self._create_custom_message(response)
+            
+        # Load send buffer
+        self.response_created = True
+        self._send_buffer += message
+        
+    def _generate_response(self):
+        args = self.request.get("args")
         # TODO: catch input exceptions here
-        opcode = self.request.get("opcode")
+        opcode = self._header["opcode"]
         if opcode == "create_account":
-            result = self.db.create_account(*self.request.get("args"))
+            result = self.db.create_account(*args)
         elif opcode == "login_account":
-            result = self.db.login_account(*self.request.get("args"))
+            result = self.db.login_account(*args)
             # Add to active clients
             if result["status_code"] == ResponseCode.SUCCESS.value:
                 pass
@@ -114,18 +124,18 @@ class Message:
         elif opcode == "list_accounts":
             result = self.db.list_accounts()
         elif opcode == "delete_account":
-            result = self.db.delete_account(*self.request.get("args"))
+            result = self.db.delete_account(*args)
         elif opcode == "homepage":
-            result = self.db.fetch_homepage(*self.request.get("args"))
+            result = self.db.fetch_homepage(*args)
         elif opcode == "read_msg_undelivered":
-            result = self.db.fetch_messages_undelivered(*self.request.get("args"))
+            result = self.db.fetch_messages_undelivered(*args)
         elif opcode == "read_msg_delivered":
-            result = self.db.fetch_messages_delivered(*self.request.get("args"))
+            result = self.db.fetch_messages_delivered(*args)
         elif opcode == "delete_msg":
-            result = self.db.delete_messages(*self.request.get("args"))
+            result = self.db.delete_messages(*args)
         elif opcode == "send_msg":
             # Check if receiver exists
-            if not self.db.account_exists(self.request.get("args")[1]):
+            if not self.db.account_exists(args[1]):
                 result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
                 return result
             # TODO: Check if receiver is online. verify sending
@@ -137,12 +147,12 @@ class Message:
                 delivered = True
             # Insert message into database
             timestamp = round(datetime.datetime.now().microsecond)
-            result = self.db.insert_message(*self.request.get("args"), timestamp, delivered)
+            result = self.db.insert_message(*self.request, timestamp, delivered)
         elif opcode == "receive_msg":
             pass
         else:
             pass
-        response = {"opcode": opcode, "result": result}
+        response = result["status_code"], result.get("data", [])
         return response
 
     def process_events(self, mask):
@@ -160,22 +170,15 @@ class Message:
             self.process_protoheader()
             
         # Decode header and content
-        if self.is_json:
-            if self._header_len is not None and self._header is None:
-                self.process_jsonheader()
-            
-            if self._header and self.request is None:
-                self.process_json_request()
-        else:
-            if self._header_len is not None and self._header is None:
-                self.process_custom_header()
-            
-            if self._header and self.request is None:
-                self.process_custom_request()
+        if self._header_len is not None and self._header is None:
+            self.process_header()
+        
+        if self._header and self.request is None:
+            self.process_content()
             
     def write(self):
         if self.request and not self.response_created:
-            self.create_response()
+            self._process_request()
 
         self._write()
 
@@ -203,30 +206,39 @@ class Message:
             self.sock = None
 
     def process_protoheader(self):
-        #Process proto header
+        # Get header length
         hdrlen = 2
+                
+        if len(self._recv_buffer) >= hdrlen:
+            v = struct.unpack(
+                ">H", self._recv_buffer[:hdrlen]
+            )[0]
+            if v != version: 
+                raise ValueError(f"Unsupported version: {v}")
+            self._recv_buffer = self._recv_buffer[hdrlen:]
+
         if len(self._recv_buffer) >= hdrlen:
             self._header_len = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
             self._recv_buffer = self._recv_buffer[hdrlen:]
-        # TODO: handle is_json
 
-    def process_jsonheader(self):
+    def process_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
-                "byteorder",
-                "content_type",
+                # "byteorder",
+                # "content_type",
                 "content_encoding",
                 "content_length",
+                "opcode"
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
 
-    def process_json_request(self):
+    def process_content(self):
         # Check if request is fully received
         content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len: # TODO: exception
@@ -244,23 +256,3 @@ class Message:
         
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
-
-    def process_custom_header(self):
-        pass
-    
-    def process_custom_request(self):
-        pass
-
-    def create_response(self):
-        # Create response
-        response = self._create_response_content()
-
-        # Encode response as json or custom
-        if self._header["content_type"] == "json": # NOTE: type may be a redundant field
-            message = self._create_json_message(response)
-        else:
-            message = self._create_custom_message(response)
-            
-        # Load send buffer
-        self.response_created = True
-        self._send_buffer += message
