@@ -8,7 +8,6 @@ from database import DatabaseHandler  # Assuming this is saved as database_handl
 from database_setup import database_setup
 from codes import ResponseCode
 
-
 db_path = "messages.db"
 
 class TestDatabaseHandler(unittest.TestCase):

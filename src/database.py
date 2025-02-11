@@ -1,9 +1,5 @@
 import sqlite3
 from enum import Enum
-import sys
-import os
-from database_setup import database_setup
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from codes import ResponseCode
 from typing import Union
 
@@ -72,7 +68,7 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
-    def list_all_accounts(self) -> dict[int, list[tuple]]:
+    def list_accounts(self) -> dict[int, list[tuple]]:
         """ Return a list of all accounts """
         try:
             # Fetch all accounts

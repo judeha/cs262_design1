@@ -17,8 +17,14 @@ RESPONSE_MESSAGES = {
     ResponseCode.DATABASE_ERROR: "Database error",
 }
 
+class Schema(Enum):
+    ACCOUNTS = 3,
+    CLIENT_MSG = 5, # id auto-generated
+    SERVER_MSG = 6, # tuple(id, sender_username, receiver_username, msg_content, timestamp, delivered/undelivered bool)
+
+
 class OpCode(Enum):
-    CHECK_USERNAME = 0
+    ACCOUNT_EXISTS = 0
     CREATE_ACCOUNT = 1
     LOGIN_ACCOUNT = 2
     LIST_ACCOUNTS = 3
@@ -29,26 +35,28 @@ class OpCode(Enum):
     DELETE_MSG = 8
     SEND_MSG = 9
     RECEIVE_MSG = 10
+    LOGOUT_ACCOUNT = 11
 
 OPCODE_MESSAGES = {
 }
 
 OPCODE_INPUTS = {
-    OpCode.CHECK_USERNAME: ["username"],
-    OpCode.CREATE_ACCOUNT: ["username", "password"],
-    OpCode.LOGIN_ACCOUNT: ["username", "password"],
-    OpCode.LIST_ACCOUNTS: [],
-    OpCode.DELETE_ACCOUNT: ["username", "password"],
-    OpCode.HOMEPAGE: ["username"],
-    OpCode.READ_MSG_UNDELIVERED: ["username","num_msgs"],
-    OpCode.READ_MSG_DELIVERED: ["username","num_msgs"],
-    OpCode.DELETE_MSG: ["message_ids"],
-    OpCode.SEND_MSG: ["message"],
-    OpCode.RECEIVE_MSG: ["message"],
+    OpCode.ACCOUNT_EXISTS: 1,
+    OpCode.CREATE_ACCOUNT: 2,
+    OpCode.LOGIN_ACCOUNT: 2,
+    OpCode.LIST_ACCOUNTS: 0,
+    OpCode.DELETE_ACCOUNT: 2,
+    OpCode.HOMEPAGE: 1,
+    OpCode.READ_MSG_UNDELIVERED: 2,
+    OpCode.READ_MSG_DELIVERED: 2,
+    OpCode.DELETE_MSG: -1,
+    OpCode.SEND_MSG: 1,
+    OpCode.RECEIVE_MSG: 1,
+    OpCode.LOGOUT_ACCOUNT: 1,
 }
 
 OPCODE_OUTPUTS = {
-    OpCode.CHECK_USERNAME: [],
+    OpCode.ACCOUNT_EXISTS: [],
     OpCode.CREATE_ACCOUNT: ["username", "password"],
     OpCode.LOGIN_ACCOUNT: ["username", "password"],
     OpCode.LIST_ACCOUNTS: [],
@@ -59,4 +67,5 @@ OPCODE_OUTPUTS = {
     OpCode.DELETE_MSG: ["message_ids"],
     OpCode.SEND_MSG: ["message"],
     OpCode.RECEIVE_MSG: ["message"],
+    OpCode.LOGOUT_ACCOUNT: ["username"],
 }

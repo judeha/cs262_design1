@@ -1,18 +1,19 @@
 import io
 import json
+import yaml
 import selectors
 import struct
-import sys
-import ast
 import datetime
-from enum import Enum
-from codes import ResponseCode
-# import os
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# from src.utils.database import DatabaseHandler
+from codes import ResponseCode, OpCode
 from database import DatabaseHandler
 
-version = 1
+# Read config file
+yaml_path = "config.yaml"
+with open(yaml_path) as y:
+    config_dict = yaml.safe_load(y)
+version = config_dict["version"]
+key = config_dict["key"]
+db_path = config_dict["db_path"] # TODO: can probably pass in the main server file
 
 class Message:
     def __init__(self, selector, sock, addr, db_path="messages.db"):
@@ -27,7 +28,6 @@ class Message:
         self.response_created = False
         self.db = DatabaseHandler(db_path) # TODO: should we move this outside?
         self.active_clients = {} # TODO: in-session tracking improved?
-        self.is_custom = False
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -96,49 +96,50 @@ class Message:
         return message
 
     def _process_request(self):
+        # Get action and arguments
+        opcode = self._header["opcode"]
+        args = self.request.get("args",[])
+
         # Create response
-        result = self._generate_response()
+        result = self._generate_action(opcode, args)
+        status_code = result["status_code"]
+        data = result.get("data", [])
 
         # Encode response as json or custom
-        status_code, data = result
         response = {"status_code": status_code, "data": data}
         message = self._package_response(response)
-        # else:
-        #     message = self._create_custom_message(response)
             
         # Load send buffer
         self.response_created = True
         self._send_buffer += message
         
-    def _generate_response(self):
-        args = self.request.get("args")
+    def _generate_action(self, opcode, args):
         # TODO: catch input exceptions here
-        opcode = self._header["opcode"]
-        if opcode == "check_username":
+        if opcode == OpCode.ACCOUNT_EXISTS.value:
             result = self.db.account_exists(*args)
             if result:
-                result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value}
-        elif opcode == "create_account":
+                result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value} # TODO: cleanup
+        elif opcode == OpCode.CREATE_ACCOUNT.value:
             result = self.db.create_account(*args)
-        elif opcode == "login_account":
+        elif opcode == OpCode.LOGIN_ACCOUNT.value:
             result = self.db.login_account(*args)
             # Add to active clients
             if result["status_code"] == ResponseCode.SUCCESS.value:
                 pass
                 # self.active_clients[result["data"]["username"]] = self.sock
-        elif opcode == "list_accounts":
+        elif opcode == OpCode.LIST_ACCOUNTS.value:
             result = self.db.list_accounts()
-        elif opcode == "delete_account":
+        elif opcode == OpCode.DELETE_ACCOUNT.value:
             result = self.db.delete_account(*args)
-        elif opcode == "homepage":
+        elif opcode == OpCode.HOMEPAGE.value:
             result = self.db.fetch_homepage(*args)
-        elif opcode == "read_msg_undelivered":
+        elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
             result = self.db.fetch_messages_undelivered(*args)
-        elif opcode == "read_msg_delivered":
+        elif opcode == OpCode.READ_MSG_DELIVERED.value:
             result = self.db.fetch_messages_delivered(*args)
-        elif opcode == "delete_msg":
+        elif opcode == OpCode.DELETE_MSG.value:
             result = self.db.delete_messages(*args)
-        elif opcode == "send_msg":
+        elif opcode == OpCode.SEND_MSG.value:
             # Check if receiver exists
             if not self.db.account_exists(args[1]):
                 result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
@@ -153,12 +154,17 @@ class Message:
             # Insert message into database
             timestamp = round(datetime.datetime.now().microsecond)
             result = self.db.insert_message(*self.request, timestamp, delivered)
-        elif opcode == "receive_msg":
+        elif opcode == OpCode.RECEIVE_MSG.value:
+            result = {"status_code": ResponseCode.SUCCESS.value}
             pass
+        elif opcode == OpCode.LOGOUT_ACCOUNT.value: # TODO: is this ok?
+            result = {"status_code": ResponseCode.SUCCESS.value}
+            self.close()
         else:
-            pass
-        response = result["status_code"], result.get("data", [])
-        return response
+            result = {"status_code": ResponseCode.SUCCESS.value} #
+            pass # TODO: as exception or as unknown opcode status code? also could move to header
+            # NOTE: send an exception status code + data = exception message to client? or shouldn't be exposed. whole try loop
+        return result
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -211,9 +217,9 @@ class Message:
             self.sock = None
 
     def process_protoheader(self):
-        # Get header length
         hdrlen = 2
                 
+        # Get version
         if len(self._recv_buffer) >= hdrlen:
             v = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
@@ -222,6 +228,7 @@ class Message:
                 raise ValueError(f"Unsupported version: {v}")
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
+        # Get header length
         if len(self._recv_buffer) >= hdrlen:
             self._header_len = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]

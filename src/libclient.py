@@ -4,9 +4,16 @@ import selectors
 import struct
 import sys
 import tkinter
-from codes import ResponseCode, RESPONSE_MESSAGES  
+import yaml
+from codes import ResponseCode, RESPONSE_MESSAGES, OpCode, OPCODE_MESSAGES 
 
-version = 1 # TODO: put in config file, change from >H if float
+# Read config file
+yaml_path = "config.yaml"
+with open(yaml_path) as y:
+    config_dict = yaml.safe_load(y)
+version = config_dict["version"]
+key = config_dict["key"]
+db_path = config_dict["db_path"]
 
 class Message:
     def __init__(self, selector, sock, addr, request):
@@ -131,36 +138,38 @@ class Message:
             pass
             # TODO: stay on the page
         else:
-            if opcode == "check_username":
+            if opcode == OpCode.ACCOUNT_EXISTS.value:
                 client.create_account_frame()
                 if status_code == ResponseCode.SUCCESS.value: 
                     client.create_login_frame() 
 
-            elif opcode == "create_account":
+            elif opcode == OpCode.CREATE_ACCOUNT.value:
                 pass
                 # TODO: display login page
-            elif opcode == "login_account":
+            elif opcode == OpCode.LOGIN_ACCOUNT.value:
                 print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
-            elif opcode == "delete_account":
+            elif opcode == OpCode.DELETE_ACCOUNT.value:
                 pass
                 # TODO: display create account page
-            elif opcode == "read_msg_delivered":
+            elif opcode == OpCode.LIST_ACCOUNTS.value:
+                print("Here are all the accounts: ", [data])
+                # TODO: display accounts
+            elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+                pass
+            elif opcode == OpCode.READ_MSG_DELIVERED.value:
                 print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
-            elif opcode == "read_msg_undelivered":
+            elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
                 print("Here are your messages: ", data[1])
                 print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == "delete_msg":
+                # TODO: display updated homepage
+            elif opcode == OpCode.DELETE_MSG.value:
                 pass
-                # TODO: display homepage
-            elif opcode == "list_all_accounts":
-                print("Here are all the accounts: ", [data])
-                # TODO: display accounts
-            elif opcode == "homepage":
+                # TODO: display updated homepage
+            elif opcode == OpCode.HOMEPAGE.value:
                 print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
