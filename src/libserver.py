@@ -116,10 +116,9 @@ class Message:
         self._send_buffer += message
         
     def _generate_action(self, opcode, args):
-        print('GENERATING')
         # TODO: catch input exceptions here
         if opcode == OpCode.ACCOUNT_EXISTS.value:
-            result = self.db.account_exists(*args)
+            result = self.db.account_exists(args[0])
             # parse result of account_exists, which is a bool
             if not result:
                 result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
@@ -287,7 +286,6 @@ class Message:
         if len(self._recv_buffer) >= hdrlen:
             print(hdrlen, len(self._recv_buffer))
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
-            print("HEADER", self._header)
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 # "byteorder",
@@ -313,7 +311,6 @@ class Message:
         encoding = self._header["content_encoding"]
         self.request = self._json_decode(data, encoding)
         print(f"Received request {self.request!r} from {self.addr}")
-        print(f"Request type: {type(self.request)}")
         
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")

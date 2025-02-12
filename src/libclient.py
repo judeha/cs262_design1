@@ -18,7 +18,7 @@ key = config_dict["key"]
 db_path = config_dict["db_path"]
 
 class Message:
-    def __init__(self, selector, sock, addr, request):
+    def __init__(self, selector, sock, addr, request, incoming_queue=None):
         self.selector = selector
         self.sock = sock
         self.addr = addr
@@ -29,6 +29,7 @@ class Message:
         self._header_len = None
         self._header = None
         self.response = None
+        self.incoming_queue = incoming_queue
 
         # self.events = selectors.EVENT_READ | selectors.EVENT_WRITE
 
@@ -282,51 +283,53 @@ class Message:
         # self.close() # TODO: fix
 
     def _generate_action(self, opcode, status_code, data):
+        self.incoming_queue.put({"opcode": opcode, "status_code": status_code, "data": data})
+
         # TODO: enforce I/O
-        if status_code != ResponseCode.SUCCESS.value:
-            pass
-        else:
-            if opcode == OpCode.ACCOUNT_EXISTS.value:
-                # self.setup_login_frame()
-                pass
-            elif opcode == OpCode.CREATE_ACCOUNT.value:
-                # self.setup_home_frame()
-                pass
-            elif opcode == OpCode.LOGIN_ACCOUNT.value:
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == OpCode.DELETE_ACCOUNT.value:
-                pass
-                # TODO: display create account page
-            elif opcode == OpCode.LIST_ACCOUNTS.value:
-                print("Here are all the accounts: ", [data])
-                # TODO: display accounts
-            elif opcode == OpCode.LOGOUT_ACCOUNT.value:
-                pass
-            elif opcode == OpCode.READ_MSG_DELIVERED.value:
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
-                print("Here are your messages: ", data[1])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display updated homepage
-            elif opcode == OpCode.DELETE_MSG.value:
-                pass
-                # TODO: display updated homepage
-            elif opcode == OpCode.HOMEPAGE.value:
-                print("Here are your messages: ", data[1:])
-                print("You have ", data[0], " unread messages.")
-                # TODO: display homepage
-            elif opcode == OpCode.SEND_MSG.value:
-                pass
-                # TODO: display homepage
-            elif opcode == OpCode.RECEIVE_MSG.value:
-                print("You have a new message. Here are your messages: ", data)
-                # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
-            else:
-                print("Unknown opcode")
+        # if status_code != ResponseCode.SUCCESS.value:
+        #     self.incoming_queue.put({"opcode": {opcode}, "status_code": status_code, "data": data})
+        # else:
+        #     if opcode == OpCode.ACCOUNT_EXISTS.value:
+        #         # self.setup_login_frame()
+        #         self.incoming_queue.put({"opcode": {opcode}, "status_code": status_code, "data": data})
+        #     elif opcode == OpCode.CREATE_ACCOUNT.value:
+        #         # self.setup_home_frame()
+        #         pass
+        #     elif opcode == OpCode.LOGIN_ACCOUNT.value:
+        #         print("Here are your messages: ", data[1:])
+        #         print("You have ", data[0], " unread messages.")
+        #         # TODO: display homepage
+        #     elif opcode == OpCode.DELETE_ACCOUNT.value:
+        #         pass
+        #         # TODO: display create account page
+        #     elif opcode == OpCode.LIST_ACCOUNTS.value:
+        #         print("Here are all the accounts: ", [data])
+        #         # TODO: display accounts
+        #     elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+        #         pass
+        #     elif opcode == OpCode.READ_MSG_DELIVERED.value:
+        #         print("Here are your messages: ", data[1:])
+        #         print("You have ", data[0], " unread messages.")
+        #         # TODO: display homepage
+        #     elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
+        #         print("Here are your messages: ", data[1])
+        #         print("You have ", data[0], " unread messages.")
+        #         # TODO: display updated homepage
+        #     elif opcode == OpCode.DELETE_MSG.value:
+        #         pass
+        #         # TODO: display updated homepage
+        #     elif opcode == OpCode.HOMEPAGE.value:
+        #         print("Here are your messages: ", data[1:])
+        #         print("You have ", data[0], " unread messages.")
+        #         # TODO: display homepage
+        #     elif opcode == OpCode.SEND_MSG.value:
+        #         pass
+        #         # TODO: display homepage
+        #     elif opcode == OpCode.RECEIVE_MSG.value:
+        #         print("You have a new message. Here are your messages: ", data)
+        #         # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
+        #     else:
+        #         print("Unknown opcode")
 
     def process_events(self, mask):
         if mask & selectors.EVENT_READ:
@@ -335,6 +338,10 @@ class Message:
             self.write()
 
     def read(self):
+        self._header_len = None
+        self._header = None
+        self.response = None
+        self._request_queued = False
         self._read()
 
         # Decode protoheader: get request type
@@ -346,7 +353,7 @@ class Message:
             self.process_header()
 
         if self._header and self.response is None:
-            self.process_content()
+            self._process_response()
 
     def write(self):
         if not self._request_queued:
@@ -413,24 +420,3 @@ class Message:
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
-                
-    def process_content(self):
-        # Check if request is fully received
-        content_len = self._header["content_length"]
-        if not len(self._recv_buffer) >= content_len: # TODO: exception
-            return
-        
-        # Save data from receive buffer
-        data = self._recv_buffer[:content_len]
-        self._recv_buffer = self._recv_buffer[content_len:]
-
-        # Decode response data
-        encoding = self._header["content_encoding"]
-        self.response = self._json_decode(data, encoding)
-        print(f"Received response {self.response!r} from {self.addr}")
-
-        # Process response content
-        self._process_response()
-
-        # Close when response has been processed
-        # self.close()
