@@ -119,6 +119,7 @@ class Message:
         self._send_buffer += message
         
     def _generate_action(self, opcode, args):
+        print('GENERATING')
         # TODO: catch input exceptions here
         if opcode == OpCode.ACCOUNT_EXISTS.value:
             print("IN GENERATE ACTION USERNAMEN EXISTS>")
@@ -189,9 +190,6 @@ class Message:
                                        round(datetime.datetime.now().microsecond),
                                        False)
                 result = {"status_code": ResponseCode.SUCCESS.value}
-        elif opcode == OpCode.RECEIVE_MSG.value:
-            result = {"status_code": ResponseCode.SUCCESS.value}
-            pass
         elif opcode == OpCode.LOGOUT_ACCOUNT.value:
             try:
                 del self.active_clients[args[0]]
@@ -200,8 +198,9 @@ class Message:
                 result = {"status_code": ResponseCode.BAD_REQUEST.value} # TODO: return error message as data
             self.close()
         else:
-            result = {"status_code": ResponseCode.SUCCESS.value} #
-            pass # TODO: as exception or as unknown opcode status code? also could move to header
+            with Exception as e:
+                result = {"status_code": ResponseCode.SUCCESS.value} #
+            # TODO: as exception or as unknown opcode status code? also could move to header
             # NOTE: send an exception status code + data = exception message to client? or shouldn't be exposed. whole try loop
         return result
 
@@ -210,8 +209,14 @@ class Message:
             self.read()
         if mask & selectors.EVENT_WRITE:
             self.write()
-
+    
     def read(self):
+        # Reset previous request info
+        self.response_created = False
+        self._header_len = None
+        self._header = None
+        self.request = None
+
         # Read in bytes
         self._read()
 
@@ -223,7 +228,7 @@ class Message:
         # Decode header and content
         if self._header_len is not None and self._header is None:
             self.process_header()
-        
+                
         if self._header and self.request is None:
             self.process_content()
             
@@ -232,6 +237,8 @@ class Message:
             self._process_request()
 
         self._write()
+
+        self._set_selector_events_mask("r")
 
     def close(self):
         print(f"Closing connection to {self.addr}")
@@ -278,7 +285,9 @@ class Message:
     def process_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
+            print(hdrlen, len(self._recv_buffer))
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
+            print("HEADER", self._header)
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 # "byteorder",

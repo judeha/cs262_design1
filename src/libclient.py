@@ -153,8 +153,51 @@ class Message:
 
         print("IN GENERATE ACTION")
 
-        pass
-        
+        # TODO: enforce I/O
+        if status_code != ResponseCode.SUCCESS.value:
+            pass
+        else:
+            if opcode == OpCode.ACCOUNT_EXISTS.value:
+                print("From server: the account exists!")
+                # self.setup_login_frame()
+            elif opcode == OpCode.CREATE_ACCOUNT.value:
+                # self.setup_home_frame()
+                pass
+            elif opcode == OpCode.LOGIN_ACCOUNT.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.DELETE_ACCOUNT.value:
+                pass
+                # TODO: display create account page
+            elif opcode == OpCode.LIST_ACCOUNTS.value:
+                print("Here are all the accounts: ", [data])
+                # TODO: display accounts
+            elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+                pass
+            elif opcode == OpCode.READ_MSG_DELIVERED.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
+                print("Here are your messages: ", data[1])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display updated homepage
+            elif opcode == OpCode.DELETE_MSG.value:
+                pass
+                # TODO: display updated homepage
+            elif opcode == OpCode.HOMEPAGE.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.SEND_MSG.value:
+                pass
+                # TODO: display homepage
+            elif opcode == OpCode.RECEIVE_MSG.value:
+                print("You have a new message. Here are your messages: ", data)
+                # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
+            else:
+                print("Unknown opcode")
 
     def process_events(self, mask):
         print("IN PROCESS EVENTS")
@@ -189,9 +232,11 @@ class Message:
 
         if not self._request_queued:
             self.queue_request(self.request)
-        
-        print(f"🚀 Sending request: {self._send_buffer!r}")
 
+            self.queue_request()
+        
+        print("SEND_BUFFER", self._send_buffer)
+        
         self._write()
 
         print("SUCCESSFULLY SENT")
