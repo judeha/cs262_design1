@@ -17,6 +17,9 @@ db_path = config_dict["db_path"] # TODO: can probably pass in the main server fi
 min_message_len = config_dict["min_message_len"]
 max_message_len = config_dict["max_message_len"]
 
+# TODO: logging
+# TODO: return error message as data
+
 class Message:
     def __init__(self, selector, sock, addr, db_path="messages.db", active_clients={}):
         self.selector = selector
@@ -117,7 +120,9 @@ class Message:
         
     def _generate_action(self, opcode, args):
         # TODO: catch input exceptions here
-        if opcode == OpCode.ACCOUNT_EXISTS.value:
+        if opcode == OpCode.STARTING.value:
+            result = {"status_code": ResponseCode.SUCCESS.value}
+        elif opcode == OpCode.ACCOUNT_EXISTS.value:
             result = self.db.account_exists(args[0])
             # parse result of account_exists, which is a bool
             if not result:
@@ -147,23 +152,21 @@ class Message:
             sender = args[0]
             receiver = args[1]
             msg_content = args[2]
-            # Check both accounts exist
-            if not self.db.account_exists(args[0]) or not self.db.account_exists(args[1]):
-                return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
-            # Enforce message constraints
-            if len(args[2]) < min_message_len or len(args[2]) > max_message_len:
-                return {"status_code": ResponseCode.BAD_REQUEST.value}
             # If receiver online: try sending immediately
-            if args[1] in self.active_clients:
+            if receiver in self.active_clients:
                 try:
+                    # Insert message into database
+                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), True)
 
                     # We have a Message object for the receiver
                     receiver_msg = self.active_clients[receiver]
                 
                     # Construct a new header or payload for the receiver
+                    new_args = [self.db.cursor.lastrowid] + args
+                    print("HERE", new_args)
                     response = {
                         "status_code": ResponseCode.SUCCESS.value,
-                        "data": [(*args, round(datetime.datetime.now().microsecond), True)]
+                        "data": [(*new_args, round(datetime.datetime.now().microsecond), True)] # TODO: timestamp isn't correct
                     }
                     
                     # Temporarily update our opcode to "RECEIVE_MSG" 
@@ -179,9 +182,6 @@ class Message:
                     receiver_msg._send_buffer += packaged
                     # Ensure the receiver is listening for EVENT_WRITE
                     receiver_msg._set_selector_events_mask("w")
-
-                    # Insert message into database
-                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), True)
                 except Exception as e:
                     result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), False)
             else:
@@ -190,12 +190,12 @@ class Message:
                                        round(datetime.datetime.now().microsecond),
                                        False)
                 result = {"status_code": ResponseCode.SUCCESS.value}
-        elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+        elif opcode == OpCode.LOGOUT_ACCOUNT.value: # TODO: necessary?
             try:
                 del self.active_clients[args[0]]
                 result = {"status_code": ResponseCode.SUCCESS.value}
             except ValueError as e:
-                result = {"status_code": ResponseCode.BAD_REQUEST.value} # TODO: return error message as data
+                result = {"status_code": ResponseCode.BAD_REQUEST.value}
             self.close()
         else:
             with Exception as e:

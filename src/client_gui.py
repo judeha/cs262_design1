@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 import argparse
 import socket
+import yaml
 import selectors
-import sys
 import threading
 import tkinter as tk
 from tkinter import scrolledtext
 import queue
-
-# Adjust the following import paths as needed:
-# from libclient import Message
-from codes import OpCode, ResponseCode  # If you need these enums
-import yaml
-import struct
-import json
+from codes import OpCode, ResponseCode
 from libclient import Message
 
+# Read config file
+yaml_path = "config.yaml"
+with open(yaml_path) as y:
+    config_dict = yaml.safe_load(y)
+BG_COLOR = config_dict['bg_color']
+BTN_TXT_COLOR = config_dict['btn_txt_color']
+BTN_BG_COLOR = config_dict['btn_bg_color']
+
 # -----------------------------------------------------------------------------
-# Background Thread: Manages the Selector Event Loop
+# Background Thread: manages the selector event while loop
 # -----------------------------------------------------------------------------
 
 class SelectorThread(threading.Thread):
@@ -46,13 +48,12 @@ class SelectorThread(threading.Thread):
                 except Exception as e:
                     print(f"[SelectorThread] Error in process_events: {e}")
                     message_obj.close()
-            # Optional: other periodic tasks...
 
         # Cleanup when stop_event is triggered
         self.sel.close()
 
 # -----------------------------------------------------------------------------
-# GUI Class: Basic Chat Window
+# GUI Class: basic chat window
 # -----------------------------------------------------------------------------
 
 class ChatGUI:
@@ -66,52 +67,38 @@ class ChatGUI:
         :param incoming_queue: queue.Queue for receiving updates from the server
         """
         self.root = root
-        self.root.geometry("1000x700")
         self.message_obj = message_obj
         self.incoming_queue = incoming_queue
 
         # Set up the main window
-        self.root.title("Selector-Based Client")
-        self.container = tk.Frame(root)
+        self.root.title("MyChat")
+        self.root.geometry("800x400")
+        self.container = tk.Frame(root, bg=BG_COLOR)
         self.container.pack(expand=True, fill=tk.BOTH)
-        # self.container.pack(side="top", fill="both", expand=True)
 
-        # self.setup_main_frame()
+        # Set up all wireframes
         self.frames = {}
         self.setup_frames()
-        self.show_frame("main") # show the main frame initially
-
-        # # Text widget for displaying chat / server responses
-        # self.chat_display = scrolledtext.ScrolledText(self.frame, wrap=tk.WORD, state='disabled')
-        # self.chat_display.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
-
-        # # Entry + send button
-        # self.entry_frame = tk.Frame(self.frame)
-        # self.entry_frame.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # self.input_field = tk.Entry(self.entry_frame)
-        # self.input_field.pack(side=tk.LEFT, expand=True, fill=tk.X)
-
-        # self.send_button = tk.Button(self.entry_frame, text="Send", command=lambda: self.send_message(OpCode.SEND_MSG.value, ["message"]))
-        # self.send_button.pack(side=tk.RIGHT)
+        self.show_frame("main") # Show the main frame initially
 
         # Periodically poll the incoming queue
         self.poll_incoming()
+
+        # Initialize chat display
+        self.messages = [] # TODO: sketch
+        self.count = 0
+        self.accounts = [] # TODO: sketch
 
     def send_message(self, opcode, args):
         """
         Sends a request to the server using the existing `message_obj`.
         For example, we might send an OpCode.SEND_MSG request or something else.
         """
-        # msg_text = self.input_field.get().strip()
-        # self.input_field.delete(0, tk.END)
-        # print("ARGS", args)
-
         if opcode is not None:
             # Here is where you craft the request dictionary that your `Message` object expects
             request = dict(
                 content_encoding= "utf-8", # TODO: put in config
-                opcode=opcode,  # Example usage
+                opcode=opcode,
                 content= {"args": args},
             )
             # Queue the request
@@ -130,41 +117,57 @@ class ChatGUI:
             try:
                 response_str = self.incoming_queue.get_nowait()
                 
+                # Get the opcode, status code, and data from the response
                 opcode = response_str["opcode"]
                 status_code = response_str["status_code"]
                 data = response_str["data"]
 
-                if opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
-                    print("HERE")
-                    pass # TODO: display error
+                # Handle the response based on the opcode
+                if opcode == OpCode.STARTING.value:
+                    self.show_frame("main") # TODO: fragile
+                elif opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
+                    # Stay in the same frame if the request failed
+                    self.display_error("Invalid request or incorrect credentials.") # TODO: shows on wrong page
                 else:
-                    if opcode == OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
+                    if opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_NOT_FOUND.value:
                         self.show_frame("create_account") # TODO: replace with opcode
-                    elif opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.SUCCESS.value:
+                    elif opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_EXISTS.value:
                         self.show_frame("login")
                     elif opcode == OpCode.CREATE_ACCOUNT.value:
                         self.show_frame("login")
                     elif opcode == OpCode.LOGIN_ACCOUNT.value:
+                        self.count = data.pop(0)
+                        self.messages = data
                         self.show_frame("homepage")
                     elif opcode == OpCode.LIST_ACCOUNTS.value:
-                        pass
+                        self.accounts = data
+                        self.show_frame("list_accounts")
                     elif opcode == OpCode.DELETE_ACCOUNT.value:
-                        pass
+                        self.show_frame("main") # TODO: add a success message
                     elif opcode == OpCode.HOMEPAGE.value:
-                        pass
+                        self.count = data.pop(0)
+                        self.messages = data # TODO: refactor for redundancy
+                        self.show_frame("homepage")
                     elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
-                        pass
+                        self.count = data.pop(0)
+                        self.messages = data
+                        self.show_frame("homepage")
                     elif opcode == OpCode.READ_MSG_DELIVERED.value:
-                        pass
+                        self.messages = data
+                        self.show_frame("homepage")
                     elif opcode == OpCode.DELETE_MSG.value:
-                        pass
+                        self.count = data.pop(0)
+                        self.messages = data
+                        self.show_frame("homepage")
                     elif opcode == OpCode.SEND_MSG.value:
-                        pass
+                        self.show_frame("homepage")
                     elif opcode == OpCode.RECEIVE_MSG.value:
-                        pass
+                        self.messages += data
+                        if len(self.messages) > 5: # TODO: put in config
+                            self.messages.pop(0)
+                        self.show_frame("homepage")
                     elif opcode == OpCode.LOGOUT_ACCOUNT.value:
-                        pass
-
+                        pass # TODO: send this to server
             except queue.Empty:
                 break
             else:
@@ -172,21 +175,46 @@ class ChatGUI:
                 # self._append_chat(response_str)
 
         # Schedule next poll
-        self.root.after(2, self.poll_incoming)
+        self.root.after(2, self.poll_incoming) # TODO: put in config
     
+    # TODO: add a display_welcome and refactor
+
+    def display_error(self, message):
+        """Displays an error message on the current frame without switching frames."""
+        if hasattr(self, "error_label"):  # Ensure the label exists
+            self.error_label.config(text=message)
+
     def setup_main_frame(self):
-        frame = tk.Frame(self.container)
+        """Set up the main frame with a simple welcome message."""        
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+
+        # Messages
+        tk.Label(frame, text="Welcome to MyChat! Please enter your username to continue.").pack(pady=10)
+        # Error message (initially hidden)
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR) # TODO: put in config
+        self.error_label.pack(pady=5)  # Show at the top
+
+        # Username entry field
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
         username.pack(side='top')
 
-        next_btn = tk.Button(frame, text="Next", command=lambda: self.on_check_username(username))
-        next_btn.pack(side='top') # TODO: handle initial request bc right now it skips the first frame
+        # Next button
+        next_btn = tk.Button(frame, text="Next", command=lambda: self._on_check_username(username))
+        next_btn.pack(side='top')
 
         return frame
     
     def setup_create_account_frame(self):
-        frame = tk.Frame(self.container)
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+
+        # Messages
+        tk.Label(frame, text="Please create an account to continue.").pack(pady=10) # TODO: use config username/password enforcements
+        # Error message (initially hidden)
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR) # TODO: put in config
+        self.error_label.pack(pady=5)  # Show at the top
+
+        # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
         username.pack(pady=5) # TODO: should these all be self?
@@ -194,13 +222,23 @@ class ChatGUI:
         password = tk.Entry(frame, show="*")
         password.pack(pady=5)
 
+        # Next button
         create_btn = tk.Button(frame, text="Create", command=lambda: self._on_create_account(username, password))
         create_btn.pack(pady=10)
 
         return frame
     
     def setup_login_frame(self):
-        frame = tk.Frame(self.container)
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+
+        # Messages
+        tk.Label(frame, text="Enter your username and password!").pack(pady=10)
+
+        # Error message (initially hidden)
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
+        self.error_label.pack(pady=5)  # Show at the top
+
+        # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
         username.pack(pady=5)
@@ -208,48 +246,135 @@ class ChatGUI:
         password = tk.Entry(frame, show="*")
         password.pack(pady=5)
 
+        # Next button
         login_btn = tk.Button(frame, text="Login", command=lambda: self._on_login_account(username, password))
         login_btn.pack(pady=10)
         
         return frame
 
-
     def setup_homepage_frame(self):
-        frame = tk.Frame(self.container)
-        # frame.pack(padx=10, pady=10, fill='both', expand=True)
+        frame = tk.Frame(self.container, bg=BG_COLOR)
         tk.Label(frame, text="Homepage").pack(pady=5)
+
+        # Error message (initially hidden)
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
+        self.error_label.pack(pady=5)  # Show at the top
 
         # Create a frame for chat display and accounts list (side by side)
         chat_frame = tk.Frame(frame)
-        chat_frame.pack(fill='both', expand=True)
-
+        chat_frame.pack(fill='both', expand=False)
+        # Scrollbar for chat display
+        scrollbar = tk.Scrollbar(chat_frame)
+        scrollbar.pack(side='right', fill='y')
         # Chatbox (read-only text widget)
-        chat_display = tk.Text(chat_frame, width=50, height=20, state='disabled', wrap='word')
-        chat_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
+        self.chat_display = tk.Text(chat_frame, width=50, height=20, state='disabled', wrap='word', yscrollcommand=scrollbar.set)
+        self.chat_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
+        scrollbar.config(command=self.chat_display.yview)  # Link scrollbar
 
         # Frame for message input and buttons (placed below chat_frame)
         input_frame = tk.Frame(frame)
         input_frame.pack(fill='x', pady=(10, 0))
 
-        # Message input field
+        # Receiver, message entry fields
+        receiver_entry = tk.Entry(input_frame)
+        receiver_entry.pack(side='left', padx=10, fill="x", expand=True)
         message_entry = tk.Entry(input_frame)
         message_entry.pack(side='left', padx=10, fill="x", expand=True)
+        receiver_label = tk.Label(frame, text="recipient", fg=BG_COLOR, highlightbackground=BG_COLOR)
+        receiver_label.pack(side='left', padx=50)
+        message_label = tk.Label(frame, text="your message", fg=BG_COLOR, highlightbackground=BG_COLOR)
+        message_label.pack(side='left', padx=100)
 
         # Send button
-        send_btn = tk.Button(input_frame, text='Send', command=lambda: self.show_frame("home"))
+        send_btn = tk.Button(input_frame, text='Send', command=lambda: self._on_send_message(receiver_entry, message_entry))
         send_btn.pack(side='left', padx=5)
 
         # Delete Account button
-        delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self.show_frame("accounts"))
-        delete_acc_btn.pack(side='left', padx=5)
+        delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self._on_delete_account(self.username, self.password))
+        delete_acc_btn.pack(side='top', fill='x', pady=5)
+
+        # List Account button
+        list_acc_btn = tk.Button(input_frame, text='List Account', command=lambda: self._on_list_accounts()) # TODO change to text field
+        list_acc_btn.pack(side='top', fill='x', pady=5)
+
+        # Fetch last X delivered messages button
+        num_read_msgs_entry = tk.Entry(input_frame)
+        num_read_msgs_entry.pack(side='right', padx=5)
+        fetch_read_btn = tk.Button(input_frame, text='See older messages', command=lambda: self._on_fetch_read_message( num_read_msgs_entry))
+        fetch_read_btn.pack(side='top', fill='x', pady=5)
+        
+        # Fetch last Y undelivered messages button
+        num_unread_msgs_entry = tk.Entry(input_frame)
+        num_unread_msgs_entry.pack(side='right', padx=5)
+        fetch_unread_btn = tk.Button(input_frame, text='See new messages', command=lambda: self._on_fetch_read_message(num_unread_msgs_entry))
+        fetch_unread_btn.pack(side='top', fill='x', pady=5)
 
         return frame
+    
+    def display_messages(self):
+        """Display messages in chat_display, ordered from oldest to newest."""
+        self.chat_display.config(state='normal')  # Enable editing temporarily
+        self.chat_display.delete(1.0, tk.END)  # Clear old messages
+
+        self.chat_display.insert(tk.END, f"Unread messages: {self.count}\n\n")
+
+        sorted_messages = self.messages
+        print("HEY", sorted_messages)
+
+        # Sort messages by timestamp (ascending order)
+        # sorted_messages = sorted(self.messages, key=lambda x: x[4])  # x[4] is timestamp
+
+        for msg in sorted_messages:
+            msg_id, sender, receiver, content, timestamp, delivered = msg
+            delivered_status = "✔" if delivered else "❌"
+            message_text = f"[{msg_id}: {sender} -> {receiver}] {timestamp}: {delivered_status}\ncontent: {content}\n\n"
+            self.chat_display.insert(tk.END, message_text)
+
+        self.chat_display.config(state='disabled')  # Disable editing again
+        self.chat_display.see(tk.END)  # Auto-scroll to latest message
+
+    def display_accounts(self):
+        """Display messages in chat_display, ordered from oldest to newest."""
+        self.accounts_display.config(state='normal')  # Enable editing temporarily
+        self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
+
+        for acc in self.accounts:
+            print("HEY", acc)
+            id, username = acc
+            text = f"{id}:{username}----------------------\n"
+            self.accounts_display.insert(tk.END, text)
+
+        self.accounts_display.config(state='disabled')  # Disable editing again
+        self.accounts_display.see(tk.END)  # Auto-scroll to latest message
+    
+    def setup_list_accounts_frame(self):
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+        tk.Label(frame, text="List of Accounts").pack(pady=5)
+
+        # Create a frame for accounts list (side by side)
+        accounts_frame = tk.Frame(frame)
+        accounts_frame.pack(fill='both', expand=True)
+
+        # Chatbox (read-only text widget)
+        self.accounts_display = tk.Text(accounts_frame, width=50, height=20, state='disabled', wrap='word')
+        self.accounts_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
+
+        # Home button
+        home_btn = tk.Button(frame, text='Homepage', command=lambda: self.show_frame("homepage")) # TODO: should you fetch homepage again?
+        home_btn.pack(side='left', padx=5)
+
+        return frame
+
+    def setup_my_matches_frame(self):
+        pass
 
     def setup_frames(self):
         self.frames["main"] = self.setup_main_frame()
         self.frames["create_account"] = self.setup_create_account_frame()
         self.frames["login"] = self.setup_login_frame()
         self.frames["homepage"] = self.setup_homepage_frame()
+        self.frames["list_accounts"] = self.setup_list_accounts_frame()
+        # self.frames["my_matches"] = self.setup_my_matches_frame()
 
         for frame in self.frames.values():
             # Place each frame in the same row/column so they overlap
@@ -261,25 +386,51 @@ class ChatGUI:
         self.frames[frame_name].tkraise()
         # self.frames[frame_name].pack()
 
-    def _append_chat(self, text):
-        """Helper to insert text into the chat display."""
-        self.chat_display.config(state='normal')
-        self.chat_display.insert(tk.END, text + "\n")
-        self.chat_display.config(state='disabled')
-        self.chat_display.see(tk.END)
+        # If switching to homepage, refresh messages
+        if frame_name == "homepage":
+            self.display_messages()
+        
+        if frame_name == "list_accounts":
+            self.display_accounts()
+
+    # def _append_chat(self, text):
+    #     """Helper to insert text into the chat display."""
+    #     self.chat_display.config(state='normal')
+    #     self.chat_display.insert(tk.END, text + "\n")
+    #     self.chat_display.config(state='disabled')
+    #     self.chat_display.see(tk.END)
 
     def _on_check_username(self, username):
-        # Check if username exists
+        # Call the server to check if the username exists
         self.send_message(OpCode.ACCOUNT_EXISTS.value, [username.get()])
 
     def _on_create_account(self, username, password):
-        # Check if username exists
+        # Call the server to create an account
         self.send_message(OpCode.CREATE_ACCOUNT.value, [username.get(), password.get()])
 
     def _on_login_account(self, username, password):
-        # Check if username exists
+        # TODO: sketch
+        self.username = username.get()
+        self.password = password.get()
         self.send_message(OpCode.LOGIN_ACCOUNT.value, [username.get(), password.get()])
+    
+    def _on_delete_account(self, username, password):
+        self.send_message(OpCode.DELETE_ACCOUNT.value, [username.get(), password.get()])
 
+    def _on_send_message(self, receiver, message):
+        self.send_message(OpCode.SEND_MSG.value, [self.username, receiver.get(), message.get()])
+        # Clear the message field
+        message.delete(0, tk.END)
+        receiver.delete(0, tk.END)
+
+    def _on_list_accounts(self):
+        self.send_message(OpCode.LIST_ACCOUNTS.value, [])
+
+    def _on_fetch_read_message(self, num_msgs):
+        self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, num_msgs.get()])
+
+    def _on_fetch_unread_message(self, num_msgs):
+        self.send_message(OpCode.READ_MSG_DELIVERED.value, [self.username, num_msgs.get()])
 # -----------------------------------------------------------------------------
 # Main Client Launcher
 # -----------------------------------------------------------------------------
@@ -297,37 +448,26 @@ def start_connection(host, port, incoming_queue):
     try:
         sock.connect((host, port))
     except BlockingIOError:
-        # It's normal for connect() to raise this in non-blocking mode
         pass
 
-    # Build initial request. Example: a simple "login" or "handshake"
+    # Build initial request
     initial_request = {
         "content_encoding": "utf-8",
-        "opcode": 0,
-        "content": {"args": ["dummy_name"]},  # just an example
+        "opcode": -1,
+        "content": {"args": []},  # TODO: fragile
     }
-    # TODO: should be able to do without initial request
 
     # Create the Message object
     addr = (host, port)
     msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
 
-    # We'll watch both READ and WRITE events initially, so we can send the handshake
+    # Register the socket with the selector
     sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
-
-    # Pass a reference to the incoming_queue so we can push server data to the GUI
-    # Typically, you'd do this by customizing your Message class to call a callback
-    # or a queue put whenever it has a complete "response". For example:
-    #
-    # def _generate_action(self, opcode, status_code, data):
-    #     # Instead of printing, we might do something like:
-    #     #   self.incoming_queue.put(f"Opcode: {opcode}, Data: {data}")
-    #     # This snippet below shows how you might do that inline:
 
     return sel, msg_obj
 
 def main(args):
-    host = args.host
+    host = args.host # TODO: put in config?
     port = args.port
 
     # A queue for receiving messages from the server in the main thread
