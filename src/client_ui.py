@@ -1,11 +1,16 @@
 import tkinter as tk
 import ast
+import threading
+
 
 class Interface:
-    def __init__(self):
+    def __init__(self, send_to_server, create_request):
         self.root = tk.Tk()
         self.root.title("Multi-Client Chat System")
         self.root.geometry("1000x700")
+        self.send_to_server = send_to_server
+        self.create_request = create_request
+        self.request = None
 
         self.container = tk.Frame(self.root)
         self.container.pack(fill="both", expand=True)
@@ -13,6 +18,21 @@ class Interface:
         self.frames = {}
         self.setup_frames()
         self.show_frame("main")  # Show the main frame initially
+
+        root_thread = threading.Thread(Target=self.root.mainloop(), daemon=True)
+        root_thread.start()
+
+    def set_request(self, request):
+        self.request = request
+
+    def create_request(self, opcode, args):
+        return dict(
+            # byteorder = sys.byteorder,
+            # content_type="json",
+            content_encoding="utf-8",
+            opcode = opcode,
+            content={"args": args},
+        )
 
     def setup_frames(self):
         """Creates and stores all the frames."""
@@ -29,10 +49,9 @@ class Interface:
 
         frame = tk.Frame(self.container)
         tk.Label(frame, text="Username:").pack(pady=5)
-        self.username = tk.Entry(frame)
-        self.username.pack(side='top')
-
-        next_btn = tk.Button(frame, text="Next", command=lambda: self.show_frame("login"))
+        username = tk.Entry(frame)
+        username.pack(side='top')
+        next_btn = tk.Button(frame, text="Next", command=lambda: self._on_check_username)
         next_btn.pack(side='top')
 
         return frame
@@ -63,7 +82,6 @@ class Interface:
 
     def setup_home_frame(self):
         """Frame that contains the main logic"""
-
 
         #TODO: Setup a section for unread messages 
         
@@ -105,9 +123,13 @@ class Interface:
         """Brings the specified frame to the front."""
         self.frames[frame_name].tkraise()
   
-    def _check_username(self):
+    def _on_check_username(self):
         """Handles username checking action."""
+        print("ON CHECK USERNAME")
         username = self.username_entry.get()
+        request = self.create_request("check_username", list(username))
+
+        print("THIS IS THE REQUEST", request)
         if not username:
             print("Error: Username cannot be empty")
             return
