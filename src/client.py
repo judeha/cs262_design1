@@ -7,15 +7,18 @@ import traceback
 import tkinter as tk
 import threading
 import libclient
+import queue
+from codes import ResponseCode, RESPONSE_MESSAGES, OpCode, OPCODE_INPUTS
 
 class Interface:
     def __init__(self, host, port):
 
+        self.queue = queue.Queue()
         #Create and connect socket
         self.addr = (host, port)
         self.sel = selectors.DefaultSelector()
         self.sock, self.events = self.start_connection()
-        self.message = libclient.Message(self.sel, self.sock, self.addr)
+        self.message = libclient.Message(self.sel, self.sock, self.addr, self.queue)
         self.sel.register(self.sock, self.events, data=self.message)
         
         self.root = tk.Tk()
@@ -28,9 +31,9 @@ class Interface:
         self._show_frame("main")  
 
         #Start GUI in a separate thread
-        # self.root_thread = threading.Thread(target=self.root.mainloop, daemon=True)
+        listener = threading.Thread(target=self.listen_for_events, daemon=True)
+        listener.start()
         self.root.mainloop()
-        self.listen_for_events()
 
     def start_connection(self):
         print(f"Starting connection to {self.addr}")
@@ -87,7 +90,8 @@ class Interface:
         self.frames["main"] = self.setup_main_frame()
         self.frames["home"] = self.setup_home_frame()
         self.frames["login"] = self.setup_login_frame()
-        self.frames["create"] = self.setup_create_account_frame()
+        self.frames["create_account"] = self.setup_create_account_frame()
+        self.frames["list_accounts"] = self.setup_list_accounts_frame()
 
         for frame in self.frames.values():
             frame.place(x=0, y=0, width=500, height=500)
@@ -114,27 +118,31 @@ class Interface:
         self.new_password_entry = tk.Entry(frame, show="*")
         self.new_password_entry.pack(pady=5)
 
-        create_btn = tk.Button(frame, text='Create', command=lambda: self._show_frame("home"))
+        create_btn = tk.Button(frame, text='Create', command=lambda: self._on_create_account())
         create_btn.pack(pady=10)
 
         return frame
 
     def setup_login_frame(self):
         """Frame that asks for the password to login into existing account"""
+
+        print("SETTING UP THE LOGIN FRAME")
         frame = tk.Frame(self.container)
         tk.Label(frame, text="Password:").pack(pady=5)
         self.password = tk.Entry(frame, show="*")
         self.password.pack(pady=5)
 
-        login_btn = tk.Button(frame, text='Login', command=lambda: self._show_frame("home"))
+        login_btn = tk.Button(frame, text='Login', command=lambda: self._on_login())
         login_btn.pack(pady=10)
 
         return frame
 
     def setup_home_frame(self):
+
         """Frame that contains the main logic"""
 
         #TODO: Setup a section for unread messages 
+        #TODO: Setup a box for sent messages next to the received messages 
         
         frame = tk.Frame(self.container)
         frame.pack(padx=10, pady=10, fill='both', expand=True)
@@ -147,10 +155,6 @@ class Interface:
         chat_display = tk.Text(chat_frame, width=50, height=20, state='disabled', wrap='word')
         chat_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
 
-        # Account names display (smaller)
-        accounts_display = tk.Text(chat_frame, width=20, height=20, state='disabled', wrap='word')
-        accounts_display.pack(side='left', padx=(5, 0), fill='y')
-
         # Frame for message input and buttons (placed below chat_frame)
         input_frame = tk.Frame(frame)
         input_frame.pack(fill='x', pady=(10, 0))
@@ -160,39 +164,134 @@ class Interface:
         message_entry.pack(side='left', padx=10, fill="x", expand=True)
 
         # Send button
-        send_btn = tk.Button(input_frame, text='Send', command=lambda: self._show_frame("home"))
+        send_btn = tk.Button(input_frame, text='Send', 
+                             command=lambda: self._on_send_message)
         send_btn.pack(side='left', padx=5)
 
+        list_acc_btn = tk.Button(input_frame, text='List Accounts', 
+                             command=lambda: self._show_frame("list_accounts"))
+        list_acc_btn.pack(side='left', padx=5)
+
+        return frame
+
+    def setup_list_accounts_frame(self):
+        '''
+        Lists all the accounts on the application
+        '''
+        frame = tk.Frame(self.container)
+        frame.pack(padx=10, pady=10, fill='both', expand=True)
+
+        # Create a frame for chat display and accounts list (side by side)
+        accs_frame = tk.Frame(frame)
+        accs_frame.pack(fill='both', expand=True)
+
         # Delete Account button
-        delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self._show_frame("accounts"))
+        delete_acc_btn = tk.Button(accs_frame, text='Delete Account', 
+                                   command=lambda: self._on_delete_account())
         delete_acc_btn.pack(side='left', padx=5)
+
+        home_btn = tk.Button(accs_frame, text='Home', 
+                                   command=lambda: self._show_frame("home"))
+        home_btn.pack(side='left', padx=5)
 
         return frame
   
     def update_home_frame(self):
         '''
-        Will update the home frame based on accounts, messages, etc. 
+        Messages: 
+            - Show unread messages
+            - Send messages
+            - Receive messages
+
+        Account:
+            - Another client deletes their account
+            - Current client deletes their account
         '''
         pass
+
+    def update_acc_frame(self):
+        '''
+        Delete account
+        Other clients create accounts 
+        '''
+
 ##############################################################################
 ##############Helper Functions
 ##############################################################################
+    def process_queue(self):
+        '''
+        Processes server responses from Queue and updates UI accordingly
+        '''
+
+        while not self.queue.empty():
+            message = self.queue.get()
+            print(f"Processing message from queue: {message}")
+
+            opcode = message["opcode"]
+            status_code = message["status_code"]
+            data = message["data"]
+
+            if opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.SUCCESS:
+                print("From server: the account exists!")
+                self.setup_login_frame() 
+            else: self.setup_create_account_frame()
+
+            if status_code != ResponseCode.SUCCESS.value: pass
+            else:
+                if opcode == OpCode.CREATE_ACCOUNT.value:
+                    self._show_frame["home"]
+                elif opcode == OpCode.LOGIN_ACCOUNT.value:
+                    self._show_frame["home"]
+                elif opcode == OpCode.DELETE_ACCOUNT.value:
+                    self.update_home_frame()
+                    self._show_frame["main"]
+                elif opcode == OpCode.LIST_ACCOUNTS.value:
+                    self._show_frame["list_accounts"]
+                elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+                    pass
+                elif opcode == OpCode.READ_MSG_DELIVERED.value:
+                    print("Here are your messages: ", data[1:])
+                    print("You have ", data[0], " unread messages.")
+                    self.update_home_frame()
+                    self._show_frame["home"]
+                elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
+                    print("Here are your messages: ", data[1])
+                    print("You have ", data[0], " unread messages.")
+                    self.update_home_frame()
+                    self._show_frame["home"]
+                elif opcode == OpCode.DELETE_MSG.value:
+                    self.update_home_frame()
+                    self._show_frame["home"]
+                elif opcode == OpCode.HOMEPAGE.value:
+                    print("Here are your messages: ", data[1:])
+                    print("You have ", data[0], " unread messages.")
+                    self._show_frame["home"]
+                elif opcode == "send_msg":
+                    self._show_frame["home"]
+                elif opcode == "receive_msg":
+                    print("You have a new message. Here are your messages: ", data)
+                    self._show_frame["home"]
+                else:
+                    print("Unknown opcode")
+
+        self.root.after(100, self.process_queue)
+
     def _show_frame(self, frame_name):
         """Brings the specified frame to the front."""
         self.frames[frame_name].tkraise()
 
     def _on_check_username(self, username):
         """Handles username checking action."""
-        print("ON CHECK USERNAME")
+        # print("ON CHECK USERNAME")
         username = username.get()
-        if not username: 
-            print("Error: Username cannot be empty")
-            return
+        # if not username: 
+        #     print("Error: Username cannot be empty")
+        #     return
         
-        request = self.create_request("check_username", [username])
+        request = self.create_request(OpCode.ACCOUNT_EXISTS.value, [username])
         self.message._set_selector_events_mask("w")
         self.message.queue_request(request)
-        
+        self.message.write()
 
     def _on_create_account(self):
         """Handles account creation request."""
@@ -207,6 +306,10 @@ class Interface:
         args = [new_username, new_password]
         request = self.create_request(action, args)
 
+    def _on_login(self):
+        '''handles login request. validates password!!'''
+        pass
+
     def _on_delete_message(self):
         pass
 
@@ -217,6 +320,9 @@ class Interface:
         pass
 
     def _on_read_message(self):
+        pass
+
+    def _on_list_account(self):
         pass
 
 if __name__ == "__main__":
@@ -246,5 +352,5 @@ if __name__ == "__main__":
     # args = ast.literal_eval(args) 
     # request = create_request(action, args)
 
-
+#TODO: ERROR Check and just display the error message
     

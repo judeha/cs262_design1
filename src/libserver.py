@@ -98,12 +98,15 @@ class Message:
         return message
 
     def _process_request(self):
+        print("PROCESSING REQUEST")
         # Get action and arguments
         opcode = self._header["opcode"]
         args = self.request.get("args",[])
+        print("information:", opcode, args)
 
         # Create response
         result = self._generate_action(opcode, args)
+        print("THE RESULT IS:", result)
         status_code = result["status_code"]
         data = result.get("data", [])
 
@@ -118,12 +121,8 @@ class Message:
     def _generate_action(self, opcode, args):
         # TODO: catch input exceptions here
         if opcode == OpCode.ACCOUNT_EXISTS.value:
+            print("IN GENERATE ACTION USERNAMEN EXISTS>")
             result = self.db.account_exists(*args)
-            # parse result of account_exists, which is a bool
-            if not result:
-                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
-            else:
-                result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value} # TODO: cleanup
         elif opcode == OpCode.CREATE_ACCOUNT.value:
             result = self.db.create_account(*args)
         elif opcode == OpCode.LOGIN_ACCOUNT.value:
@@ -207,7 +206,6 @@ class Message:
         return result
 
     def process_events(self, mask):
-        print("IN SERVER PROCESS EVENTS")
         if mask & selectors.EVENT_READ:
             self.read()
         if mask & selectors.EVENT_WRITE:
@@ -217,6 +215,7 @@ class Message:
         # Read in bytes
         self._read()
 
+        print("I AM READING")
         # Decode protoheader: get request type
         if self._header_len is None:
             self.process_protoheader()

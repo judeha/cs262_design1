@@ -174,7 +174,9 @@ class DatabaseHandler():
             # Check if account exists
             self.cursor.execute("SELECT * FROM accounts WHERE username=?", (username,))
             user = self.cursor.fetchone()
-            return user is not None
+            if user is not None:
+                return {"status_code": ResponseCode.SUCCESS.value, "data": []}
+            # else:
         except sqlite3.Error as e:
             return -1
     
