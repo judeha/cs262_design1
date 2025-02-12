@@ -6,23 +6,25 @@ import yaml
 import sys
 import tkinter as tk
 import threading
-# import yaml
+import yaml
 from codes import ResponseCode, RESPONSE_MESSAGES, OpCode, OPCODE_MESSAGES 
 
-# Read config file
+#Read config file
 yaml_path = "config.yaml"
 with open(yaml_path) as y:
     config_dict = yaml.safe_load(y)
+
 version = config_dict["version"]
 key = config_dict["key"]
 db_path = config_dict["db_path"]
+
 
 class Message:
     def __init__(self, selector, sock, addr, request, incoming_queue=None):
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = request
+        self.request = None
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
@@ -217,9 +219,14 @@ class Message:
     def _write(self):
         if self._send_buffer:
             print(f"Sending {self._send_buffer!r} to {self.addr}")
+             # Should be ready to write
+            if self.sock is None:
+                raise RuntimeError("Socket is None before writing")
+            if self.sock.fileno() == -1:
+                raise RuntimeError("Socket is closed before writing")
             try:
-                # Should be ready to write
                 sent = self.sock.send(self._send_buffer)
+
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
@@ -239,6 +246,8 @@ class Message:
 
     def _package_request(
         self, req):
+        print("IN PACKAGE REQUEST", req)
+
         # Encode content
         encoding = req["content_encoding"]
         content_bytes = self._json_encode(req["content"], encoding)
@@ -257,6 +266,8 @@ class Message:
         return message
     
     def _process_response(self):
+
+        print("IN PROCESS RESPONSE")
         # Check if request is fully received
         content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len: # TODO: exception
@@ -332,6 +343,8 @@ class Message:
         #         print("Unknown opcode")
 
     def process_events(self, mask):
+        print("IN PROCESS EVENTS")
+
         if mask & selectors.EVENT_READ:
             self.read()
         if mask & selectors.EVENT_WRITE:
@@ -356,8 +369,14 @@ class Message:
             self._process_response()
 
     def write(self):
+        print("IN WRITE")
+
         if not self._request_queued:
+            self.queue_request(self.request)
+
             self.queue_request()
+        
+        print("SEND_BUFFER", self._send_buffer)
         
         self._write()
 
@@ -383,8 +402,10 @@ class Message:
             # Delete reference to socket object for garbage collection
             self.sock = None
 
-    def queue_request(self):
-        message = self._package_request(self.request)
+    def queue_request(self, request):
+        print("IN QUEUE REQUEST")
+        self.queue_request = request
+        message = self._package_request(request)
         self._send_buffer += message
         self._request_queued = True
         
