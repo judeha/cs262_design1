@@ -116,8 +116,8 @@ class Message:
         self._send_buffer += message
         
     def _generate_action(self, opcode, args):
+        print('GENERATING')
         # TODO: catch input exceptions here
-        print(opcode)
         if opcode == OpCode.ACCOUNT_EXISTS.value:
             result = self.db.account_exists(*args)
             # parse result of account_exists, which is a bool
@@ -210,8 +210,14 @@ class Message:
             self.read()
         if mask & selectors.EVENT_WRITE:
             self.write()
-
+    
     def read(self):
+        # Reset previous request info
+        self.response_created = False
+        self._header_len = None
+        self._header = None
+        self.request = None
+
         # Read in bytes
         self._read()
 
@@ -222,7 +228,7 @@ class Message:
         # Decode header and content
         if self._header_len is not None and self._header is None:
             self.process_header()
-        
+                
         if self._header and self.request is None:
             self.process_content()
             
@@ -231,6 +237,8 @@ class Message:
             self._process_request()
 
         self._write()
+
+        self._set_selector_events_mask("r")
 
     def close(self):
         print(f"Closing connection to {self.addr}")
@@ -277,7 +285,9 @@ class Message:
     def process_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
+            print(hdrlen, len(self._recv_buffer))
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
+            print("HEADER", self._header)
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (
                 # "byteorder",
