@@ -24,7 +24,7 @@ class Message:
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = None
+        self.request = request
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
