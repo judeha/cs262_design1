@@ -103,6 +103,8 @@ class ChatGUI:
             )
             # Queue the request
             self.message_obj.request = request
+
+            print("REQUEST", request)
             self.message_obj.queue_request()
             self.message_obj._request_queued = True
             # Modify the selector so we listen for write events
