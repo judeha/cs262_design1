@@ -5,10 +5,12 @@ import yaml
 import selectors
 import threading
 import tkinter as tk
+import time
 from tkinter import scrolledtext
 import queue
 from codes import OpCode, ResponseCode
 from libclient import Message
+import random
 
 # Read config file
 yaml_path = "config.yaml"
@@ -18,13 +20,16 @@ BG_COLOR = config_dict['bg_color']
 BTN_TXT_COLOR = config_dict['btn_txt_color']
 BTN_BG_COLOR = config_dict['btn_bg_color']
 max_view = config_dict['max_view']
+emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"] # TODO: put in config
 
-# TODO: loggin
+# TODO: logging
 # TODO: error enforcement
 # TODO: matching
 # TODO: custom protocol
 # TODO: password security
-# TODO: delete messages, delete account, list account string matching
+# TODO: delete messages, list account string matching
+
+# Done: delete account, delete messages
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages the selector event while loop
@@ -255,7 +260,7 @@ class ChatGUI:
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
         # Messages
-        if self.username:
+        if hasattr(self, "username"):
             text = f"Welcome, {self.username}!"
         else:
             text = "MyChat"
@@ -297,8 +302,16 @@ class ChatGUI:
         delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self._on_delete_account(self.username, self.password))
         delete_acc_btn.pack(side='top', fill='x', pady=5)
 
+        # Add "Delete Messages" button
+        delete_msgs_entry = tk.Entry(input_frame)
+        delete_msgs_entry.pack(side='right', padx=5)
+        delete_btn = tk.Button(input_frame, text="Delete Messages", command=lambda: self._on_delete_messages(self.username, delete_msgs_entry))
+        delete_btn.pack(side='top', fill='x', pady=5)
+
         # List Account button
-        list_acc_btn = tk.Button(input_frame, text='List Account', command=lambda: self._on_list_accounts()) # TODO change to text field
+        list_acc_entry = tk.Entry(input_frame)
+        list_acc_entry.pack(side='right', padx=5)
+        list_acc_btn = tk.Button(input_frame, text='List Account', command=lambda: self._on_list_accounts(list_acc_entry)) # TODO change to text field
         list_acc_btn.pack(side='top', fill='x', pady=5)
 
         # Fetch last X delivered messages button
@@ -371,19 +384,15 @@ class ChatGUI:
         self.chat_display.delete(1.0, tk.END)  # Clear old messages
 
         self.chat_display.insert(tk.END, f"Unread messages: {self.count}\n\n")
-
-        sorted_messages = self.messages
-        print("HEY", sorted_messages)
-
-        # Sort messages by timestamp (ascending order)
-        # sorted_messages = sorted(self.messages, key=lambda x: x[4])  # x[4] is timestamp
-
-        for msg in sorted_messages:
-            msg_id, sender, receiver, content, timestamp, delivered = msg
-            delivered_status = "✔" if delivered else "❌"
-            message_text = f"[{msg_id}: {sender} -> {receiver}] {timestamp}: {delivered_status}\ncontent: {content}\n\n"
+        
+        # Display in reverse order so newest messages are at the bottom
+        for msg in self.messages:
+            msg_id, sender, receiver, content, timestamp, _ = msg
+            timestamp = timestamp / 1_000_000
+            readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+            message_text = f"{msg_id}: {sender} -> {receiver} @ {readable_time} | {content}\n\n"
             self.chat_display.insert(tk.END, message_text)
-
+            
         self.chat_display.config(state='disabled')  # Disable editing again
         self.chat_display.see(tk.END)  # Auto-scroll to latest message
 
@@ -391,11 +400,10 @@ class ChatGUI:
         """Display messages in chat_display, ordered from oldest to newest."""
         self.accounts_display.config(state='normal')  # Enable editing temporarily
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
-
         for acc in self.accounts:
-            print("HEY", acc)
             id, username = acc
-            text = f"{id}:{username}----------------------\n"
+            emoji_idx = random.randint(0, len(emojis) - 1)
+            text = f"{emojis[emoji_idx]} {id} : {username}\n"
             self.accounts_display.insert(tk.END, text)
 
         self.accounts_display.config(state='disabled')  # Disable editing again
@@ -423,7 +431,12 @@ class ChatGUI:
         self.send_message(OpCode.LOGIN_ACCOUNT.value, [username.get(), password.get()])
     
     def _on_delete_account(self, username, password):
-        self.send_message(OpCode.DELETE_ACCOUNT.value, [username.get(), password.get()])
+        self.send_message(OpCode.DELETE_ACCOUNT.value, [username, password])
+
+    def _on_delete_messages(self, username, delete_msgs):
+        delete_msgs = delete_msgs.get().split(",")
+        delete_msgs = [int(msg) for msg in delete_msgs] # TODO: find a better way
+        self.send_message(OpCode.DELETE_MSG.value, [username, delete_msgs])
 
     def _on_send_message(self, receiver, message):
         self.send_message(OpCode.SEND_MSG.value, [self.username, receiver.get(), message.get()])
@@ -431,8 +444,11 @@ class ChatGUI:
         message.delete(0, tk.END)
         receiver.delete(0, tk.END)
 
-    def _on_list_accounts(self):
-        self.send_message(OpCode.LIST_ACCOUNTS.value, [])
+    def _on_list_accounts(self, list_acc_entry): # TODO: fix
+        if list_acc_entry.get() == "":
+            self.send_message(OpCode.LIST_ACCOUNTS.value, [])
+        else:
+            self.send_message(OpCode.LIST_ACCOUNTS.value, list_acc_entry.get())
 
     def _on_fetch_unread_message(self, num_msgs):
         self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, int(num_msgs.get())])

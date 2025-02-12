@@ -146,7 +146,10 @@ class Message:
             if result["status_code"] == ResponseCode.SUCCESS.value:
                 self.active_clients[args[0]] = self
         elif opcode == OpCode.LIST_ACCOUNTS.value:
-            result = self.db.list_accounts()
+            if len(args) > 0:
+                result = self.db.list_accounts_match(args[0])
+            else:
+                result = self.db.list_accounts()
         elif opcode == OpCode.DELETE_ACCOUNT.value:
             result = self.db.delete_account(*args)
         elif opcode == OpCode.HOMEPAGE.value:
@@ -172,7 +175,6 @@ class Message:
                 
                     # Construct a new header or payload for the receiver
                     new_args = [self.db.cursor.lastrowid] + args
-                    print("HERE", new_args)
                     response = {
                         "status_code": ResponseCode.SUCCESS.value,
                         "data": [(*new_args, round(time.time() * 1_000_000), True)] # TODO: timestamp isn't correct
@@ -286,7 +288,6 @@ class Message:
     def process_header(self):
         hdrlen = self._header_len
         if len(self._recv_buffer) >= hdrlen:
-            print(hdrlen, len(self._recv_buffer))
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
             for reqhdr in (

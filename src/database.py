@@ -93,7 +93,16 @@ class DatabaseHandler():
             return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
-        
+    
+    def list_accounts_match(self, str) -> dict[int, list[tuple]]:
+        try:
+            pattern = f"%{str}%"  # Ensure search string is a single parameter
+            self.cursor.execute("SELECT id, username FROM users WHERE username LIKE ?", (pattern,))  # Tuple with comma
+            accounts = self.cursor.fetchall()
+            return{"status_code": ResponseCode.SUCCESS.value, "data": self.cursor.fetchall()}
+        except sqlite3.Error as e:
+            return {"status_code": ResponseCode.DATABASE_ERROR.value}
+                
     def insert_message(self, sender, receiver, content, timestamp: int, delivered: bool) -> dict[int]:
         """ Given message content, return message insertion status """
         try:
