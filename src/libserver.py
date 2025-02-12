@@ -3,7 +3,7 @@ import json
 import yaml
 import selectors
 import struct
-import datetime
+import time
 from codes import ResponseCode, OpCode
 from database import DatabaseHandler
 
@@ -21,7 +21,7 @@ max_message_len = config_dict["max_message_len"]
 # TODO: return error message as data
 
 class Message:
-    def __init__(self, selector, sock, addr, db_path="messages.db", active_clients={}):
+    def __init__(self, selector, sock, addr, db_path, active_clients={}):
         self.selector = selector
         self.sock = sock
         self.addr = addr
@@ -57,7 +57,16 @@ class Message:
             if data:
                 self._recv_buffer += data
             else:
+                # Socket closed, remove from active clients
+                for username, client_obj in list(self.active_clients.items()):
+                    if client_obj is self:  # Compare the `Message` object, not `sock`
+                        del self.active_clients[username]
+                        print(f"Removed {username} from active clients.")
+                        break  # Avoid modifying the dictionary while iterating
+
+                print("ACTIVE CLIENTS:", self.active_clients)
                 raise RuntimeError("Peer closed.")
+
 
     def _write(self):
         if self._send_buffer:
@@ -156,7 +165,7 @@ class Message:
             if receiver in self.active_clients:
                 try:
                     # Insert message into database
-                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), True)
+                    result = self.db.insert_message(*args, round(time.time() * 1_000_000), True)
 
                     # We have a Message object for the receiver
                     receiver_msg = self.active_clients[receiver]
@@ -166,7 +175,7 @@ class Message:
                     print("HERE", new_args)
                     response = {
                         "status_code": ResponseCode.SUCCESS.value,
-                        "data": [(*new_args, round(datetime.datetime.now().microsecond), True)] # TODO: timestamp isn't correct
+                        "data": [(*new_args, round(time.time() * 1_000_000), True)] # TODO: timestamp isn't correct
                     }
                     
                     # Temporarily update our opcode to "RECEIVE_MSG" 
@@ -183,20 +192,13 @@ class Message:
                     # Ensure the receiver is listening for EVENT_WRITE
                     receiver_msg._set_selector_events_mask("w")
                 except Exception as e:
-                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), False)
+                    result = self.db.insert_message(*args, round(time.time() * 1_000_000), False)
             else:
                 # If user not online, just store in DB
                 self.db.insert_message(sender, receiver, msg_content,
-                                       round(datetime.datetime.now().microsecond),
+                                       round(time.time() * 1_000_000),
                                        False)
                 result = {"status_code": ResponseCode.SUCCESS.value}
-        elif opcode == OpCode.LOGOUT_ACCOUNT.value: # TODO: necessary?
-            try:
-                del self.active_clients[args[0]]
-                result = {"status_code": ResponseCode.SUCCESS.value}
-            except ValueError as e:
-                result = {"status_code": ResponseCode.BAD_REQUEST.value}
-            self.close()
         else:
             with Exception as e:
                 result = {"status_code": ResponseCode.SUCCESS.value} #

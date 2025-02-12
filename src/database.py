@@ -4,13 +4,13 @@ from codes import ResponseCode
 from typing import Union
 import yaml
 
-# Read config file
+# Read config file # TODO: refactor into a function
 yaml_path = "config.yaml"
 with open(yaml_path) as y:
     config_dict = yaml.safe_load(y)
 version = config_dict["version"]
 key = config_dict["key"]
-db_path = config_dict["db_path"] # TODO: can probably pass in the main server file
+db_path = config_dict["db_path"]
 min_username_len = config_dict["min_username_len"]
 min_password_len = config_dict["min_password_len"]
 max_username_len = config_dict["max_username_len"]
@@ -144,7 +144,6 @@ class DatabaseHandler():
             self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=0 ORDER BY timestamp DESC LIMIT ?",
                                 (username, n))
             messages = self.cursor.fetchall()
-            assert(len(messages) <= n)
             # Mark messages as delivered
             message_ids = [m[0] for m in messages]
             placeholders = ','.join('?' * len(message_ids))

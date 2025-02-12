@@ -17,6 +17,14 @@ with open(yaml_path) as y:
 BG_COLOR = config_dict['bg_color']
 BTN_TXT_COLOR = config_dict['btn_txt_color']
 BTN_BG_COLOR = config_dict['btn_bg_color']
+max_view = config_dict['max_view']
+
+# TODO: loggin
+# TODO: error enforcement
+# TODO: matching
+# TODO: custom protocol
+# TODO: password security
+# TODO: delete messages, delete account, list account string matching
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages the selector event while loop
@@ -72,7 +80,7 @@ class ChatGUI:
 
         # Set up the main window
         self.root.title("MyChat")
-        self.root.geometry("800x400")
+        self.root.geometry("800x600") # TODO: put in config
         self.container = tk.Frame(root, bg=BG_COLOR)
         self.container.pack(expand=True, fill=tk.BOTH)
 
@@ -85,9 +93,9 @@ class ChatGUI:
         self.poll_incoming()
 
         # Initialize chat display
-        self.messages = [] # TODO: sketch
+        self.messages = [] # TODO: fragile
         self.count = 0
-        self.accounts = [] # TODO: sketch
+        self.accounts = []
 
     def send_message(self, opcode, args):
         """
@@ -124,13 +132,13 @@ class ChatGUI:
 
                 # Handle the response based on the opcode
                 if opcode == OpCode.STARTING.value:
-                    self.show_frame("main") # TODO: fragile
+                    self.show_frame("main") # TODO: fragile, starting condition
                 elif opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
                     # Stay in the same frame if the request failed
                     self.display_error("Invalid request or incorrect credentials.") # TODO: shows on wrong page
                 else:
                     if opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_NOT_FOUND.value:
-                        self.show_frame("create_account") # TODO: replace with opcode
+                        self.show_frame("create_account")
                     elif opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_EXISTS.value:
                         self.show_frame("login")
                     elif opcode == OpCode.CREATE_ACCOUNT.value:
@@ -163,11 +171,9 @@ class ChatGUI:
                         self.show_frame("homepage")
                     elif opcode == OpCode.RECEIVE_MSG.value:
                         self.messages += data
-                        if len(self.messages) > 5: # TODO: put in config
+                        if len(self.messages) > max_view:
                             self.messages.pop(0)
                         self.show_frame("homepage")
-                    elif opcode == OpCode.LOGOUT_ACCOUNT.value:
-                        pass # TODO: send this to server
             except queue.Empty:
                 break
             else:
@@ -177,21 +183,14 @@ class ChatGUI:
         # Schedule next poll
         self.root.after(2, self.poll_incoming) # TODO: put in config
     
-    # TODO: add a display_welcome and refactor
-
-    def display_error(self, message):
-        """Displays an error message on the current frame without switching frames."""
-        if hasattr(self, "error_label"):  # Ensure the label exists
-            self.error_label.config(text=message)
-
     def setup_main_frame(self):
         """Set up the main frame with a simple welcome message."""        
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
         # Messages
-        tk.Label(frame, text="Welcome to MyChat! Please enter your username to continue.").pack(pady=10)
+        tk.Label(frame, text="Welcome to MyChat! Check if you have an account.").pack(pady=10)
         # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR) # TODO: put in config
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
         self.error_label.pack(pady=5)  # Show at the top
 
         # Username entry field
@@ -211,13 +210,13 @@ class ChatGUI:
         # Messages
         tk.Label(frame, text="Please create an account to continue.").pack(pady=10) # TODO: use config username/password enforcements
         # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR) # TODO: put in config
+        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
         self.error_label.pack(pady=5)  # Show at the top
 
         # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
-        username.pack(pady=5) # TODO: should these all be self?
+        username.pack(pady=5)
         tk.Label(frame, text="Password:").pack(pady=5)
         password = tk.Entry(frame, show="*")
         password.pack(pady=5)
@@ -232,7 +231,7 @@ class ChatGUI:
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
         # Messages
-        tk.Label(frame, text="Enter your username and password!").pack(pady=10)
+        tk.Label(frame, text="Enter your username and password to login").pack(pady=10)
 
         # Error message (initially hidden)
         self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
@@ -254,8 +253,13 @@ class ChatGUI:
 
     def setup_homepage_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
-        tk.Label(frame, text="Homepage").pack(pady=5)
 
+        # Messages
+        if self.username:
+            text = f"Welcome, {self.username}!"
+        else:
+            text = "MyChat"
+        tk.Label(frame, text=text).pack(pady=5)
         # Error message (initially hidden)
         self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
         self.error_label.pack(pady=5)  # Show at the top
@@ -306,10 +310,60 @@ class ChatGUI:
         # Fetch last Y undelivered messages button
         num_unread_msgs_entry = tk.Entry(input_frame)
         num_unread_msgs_entry.pack(side='right', padx=5)
-        fetch_unread_btn = tk.Button(input_frame, text='See new messages', command=lambda: self._on_fetch_read_message(num_unread_msgs_entry))
+        fetch_unread_btn = tk.Button(input_frame, text='See new messages', command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
         fetch_unread_btn.pack(side='top', fill='x', pady=5)
 
         return frame
+    
+    def setup_list_accounts_frame(self):
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+        tk.Label(frame, text="List of Accounts").pack(pady=5)
+
+        # Create a frame for accounts list (side by side)
+        accounts_frame = tk.Frame(frame)
+        accounts_frame.pack(fill='both', expand=True)
+
+        # Chatbox (read-only text widget)
+        self.accounts_display = tk.Text(accounts_frame, width=50, height=20, state='disabled', wrap='word')
+        self.accounts_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
+
+        # Home button
+        home_btn = tk.Button(frame, text='Homepage', command=lambda: self.show_frame("homepage")) # TODO: should you fetch homepage again?
+        home_btn.pack(side='left', padx=5)
+
+        return frame
+
+    def setup_my_matches_frame(self):
+        pass
+
+    def setup_frames(self):
+        self.frames["main"] = self.setup_main_frame()
+        self.frames["create_account"] = self.setup_create_account_frame()
+        self.frames["login"] = self.setup_login_frame()
+        self.frames["homepage"] = self.setup_homepage_frame()
+        self.frames["list_accounts"] = self.setup_list_accounts_frame()
+        # self.frames["my_matches"] = self.setup_my_matches_frame()
+
+        for frame in self.frames.values():
+            # Place each frame in the same row/column so they overlap
+            frame.grid(row=0, column=0, sticky="nsew")
+
+    def show_frame(self, frame_name):
+        """Brings the specified frame to the front."""
+        self.frames[frame_name].tkraise()
+        # self.frames[frame_name].pack()
+
+        # If switching to homepage, refresh messages
+        if frame_name == "homepage":
+            self.display_messages()
+        
+        if frame_name == "list_accounts":
+            self.display_accounts()
+
+    def display_error(self, message):
+        """Displays an error message on the current frame without switching frames."""
+        if hasattr(self, "error_label"):  # Ensure the label exists
+            self.error_label.config(text=message)
     
     def display_messages(self):
         """Display messages in chat_display, ordered from oldest to newest."""
@@ -346,52 +400,6 @@ class ChatGUI:
 
         self.accounts_display.config(state='disabled')  # Disable editing again
         self.accounts_display.see(tk.END)  # Auto-scroll to latest message
-    
-    def setup_list_accounts_frame(self):
-        frame = tk.Frame(self.container, bg=BG_COLOR)
-        tk.Label(frame, text="List of Accounts").pack(pady=5)
-
-        # Create a frame for accounts list (side by side)
-        accounts_frame = tk.Frame(frame)
-        accounts_frame.pack(fill='both', expand=True)
-
-        # Chatbox (read-only text widget)
-        self.accounts_display = tk.Text(accounts_frame, width=50, height=20, state='disabled', wrap='word')
-        self.accounts_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
-
-        # Home button
-        home_btn = tk.Button(frame, text='Homepage', command=lambda: self.show_frame("homepage")) # TODO: should you fetch homepage again?
-        home_btn.pack(side='left', padx=5)
-
-        return frame
-
-    def setup_my_matches_frame(self):
-        pass
-
-    def setup_frames(self):
-        self.frames["main"] = self.setup_main_frame()
-        self.frames["create_account"] = self.setup_create_account_frame()
-        self.frames["login"] = self.setup_login_frame()
-        self.frames["homepage"] = self.setup_homepage_frame()
-        self.frames["list_accounts"] = self.setup_list_accounts_frame()
-        # self.frames["my_matches"] = self.setup_my_matches_frame()
-
-        for frame in self.frames.values():
-            # Place each frame in the same row/column so they overlap
-            frame.grid(row=0, column=0, sticky="nsew")
-
-
-    def show_frame(self, frame_name):
-        """Brings the specified frame to the front."""
-        self.frames[frame_name].tkraise()
-        # self.frames[frame_name].pack()
-
-        # If switching to homepage, refresh messages
-        if frame_name == "homepage":
-            self.display_messages()
-        
-        if frame_name == "list_accounts":
-            self.display_accounts()
 
     # def _append_chat(self, text):
     #     """Helper to insert text into the chat display."""
@@ -426,11 +434,11 @@ class ChatGUI:
     def _on_list_accounts(self):
         self.send_message(OpCode.LIST_ACCOUNTS.value, [])
 
-    def _on_fetch_read_message(self, num_msgs):
-        self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, num_msgs.get()])
-
     def _on_fetch_unread_message(self, num_msgs):
-        self.send_message(OpCode.READ_MSG_DELIVERED.value, [self.username, num_msgs.get()])
+        self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, int(num_msgs.get())])
+
+    def _on_fetch_read_message(self, num_msgs):
+        self.send_message(OpCode.READ_MSG_DELIVERED.value, [self.username, int(num_msgs.get())])
 # -----------------------------------------------------------------------------
 # Main Client Launcher
 # -----------------------------------------------------------------------------
@@ -489,8 +497,12 @@ def main(args):
 
     # On close, signal the selector thread to stop, close the socket, etc.
     def on_close():
+        """Handle cleanup when closing the client window."""
+        # Stop selector thread
         stop_event.set()
+        # Close connection
         message_obj.close()
+        # Destroy GUI
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
