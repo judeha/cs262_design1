@@ -33,37 +33,6 @@ class Message:
         self.response = None
         self.incoming_queue = incoming_queue
 
-        # self.events = selectors.EVENT_READ | selectors.EVENT_WRITE
-
-
-        # # tkinter attributes
-        # self.root = tk.Tk()
-        # self.root.title("Multi-Client Chat System")
-        # self.root.geometry("1000x700")
-
-        # self.container = tk.Frame(self.root)
-        # self.container.pack(fill="both", expand=True)
-
-        # self.frames = {}
-        # self.setup_frames()
-        # self.show_frame("main")  # Show the main frame initially
-
-        # root_thread = threading.Thread(target=self.root.mainloop(), daemon=True)
-        # root_thread.start()
-
-    # def create_request(self, opcode, args):
-    #     new_request =  dict(
-    #         # byteorder = sys.byteorder,
-    #         # content_type="json",
-    #         content_encoding="utf-8",
-    #         opcode = opcode,
-    #         content={"args": args},
-    #     )
-    #     # if new_request != self.request:
-    #     self.request = new_request
-    #     print(self.request)
-    #     self.selector.modify(self.sock, self.events, data=self)
-
     def setup_frames(self):
         """Creates and stores all the frames."""
         self.frames["main"] = self.setup_main_frame()
@@ -189,6 +158,7 @@ class Message:
 
     def _on_read_message(self):
         pass
+>>>>>>>>> Temporary merge branch 2
 
     ## ORIGINAL FUNCTIONS
     def _set_selector_events_mask(self, mode):
@@ -341,6 +311,7 @@ class Message:
         #         # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
         #     else:
         #         print("Unknown opcode")
+>>>>>>>>> Temporary merge branch 2
 
     def process_events(self, mask):
         print("IN PROCESS EVENTS")
@@ -355,6 +326,7 @@ class Message:
         self._header = None
         self.response = None
         self._request_queued = False
+>>>>>>>>> Temporary merge branch 2
         self._read()
 
         # Decode protoheader: get request type
@@ -369,15 +341,10 @@ class Message:
             self._process_response()
 
     def write(self):
-        print("IN WRITE")
 
         if not self._request_queued:
-            self.queue_request(self.request)
-
             self.queue_request()
-        
-        print("SEND_BUFFER", self._send_buffer)
-        
+                
         self._write()
 
         if self._request_queued and not self._send_buffer:
@@ -402,10 +369,8 @@ class Message:
             # Delete reference to socket object for garbage collection
             self.sock = None
 
-    def queue_request(self, request):
-        print("IN QUEUE REQUEST")
-        self.queue_request = request
-        message = self._package_request(request)
+    def queue_request(self):
+        message = self._package_request(self.request)
         self._send_buffer += message
         self._request_queued = True
         
@@ -440,4 +405,35 @@ class Message:
                 "opcode"
             ):
                 if reqhdr not in self._header:
+<<<<<<<<< Temporary merge branch 1
                     raise ValueError(f"Missing required header '{reqhdr}'.")
+                
+    def process_content(self):
+        print("IN PROCESS CONTENT")
+
+        # Check if request is fully received
+        content_len = self._header["content_length"]
+        if not len(self._recv_buffer) >= content_len: # TODO: exception
+            return
+        
+        # Save data from receive buffer
+        data = self._recv_buffer[:content_len]
+        self._recv_buffer = self._recv_buffer[content_len:]
+
+        # Decode response data
+        encoding = self._header["content_encoding"]
+        self.response = self._json_decode(data, encoding)
+        print(f"Received response {self.response!r} from {self.addr}")
+
+        # Process response content
+        self._process_response()
+
+        # Close when response has been processed
+        # self.close()
+
+
+
+    
+=========
+                    raise ValueError(f"Missing required header '{reqhdr}'.")
+>>>>>>>>> Temporary merge branch 2
