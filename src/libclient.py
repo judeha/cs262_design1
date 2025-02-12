@@ -218,6 +218,8 @@ class Message:
 
             self.queue_request()
         
+        print("SEND_BUFFER", self._send_buffer)
+        
         self._write()
 
         if self._request_queued and not self._send_buffer:
