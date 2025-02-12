@@ -4,6 +4,8 @@ import socket
 import yaml
 import selectors
 import threading
+import os
+import ssl
 import tkinter as tk
 from tkinter import scrolledtext
 import queue
@@ -380,7 +382,6 @@ class ChatGUI:
             # Place each frame in the same row/column so they overlap
             frame.grid(row=0, column=0, sticky="nsew")
 
-
     def show_frame(self, frame_name):
         """Brings the specified frame to the front."""
         self.frames[frame_name].tkraise()
@@ -445,10 +446,14 @@ def start_connection(host, port, incoming_queue):
     # Create and connect socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setblocking(False)
+
     try:
         sock.connect((host, port))
     except BlockingIOError:
         pass
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    secure_sock = context.wrap_socket(sock, server_hostname=host, do_handshake_on_connect=False)
 
     # Build initial request
     initial_request = {
@@ -459,10 +464,10 @@ def start_connection(host, port, incoming_queue):
 
     # Create the Message object
     addr = (host, port)
-    msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
+    msg_obj = Message(selector=sel, sock=secure_sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
 
     # Register the socket with the selector
-    sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
+    sel.register(secure_sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
 
     return sel, msg_obj
 
@@ -503,3 +508,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
+

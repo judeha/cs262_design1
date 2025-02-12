@@ -3,13 +3,14 @@ import socket
 import sys
 import traceback
 import yaml
-
+import ssl
 import libserver
-
-from datetime import datetime
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from datetime import datetime
 from database_setup import database_setup
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Read config file
 yaml_path = "config.yaml"
@@ -25,13 +26,25 @@ active_clients = {} # key: username, value: socket
 sel = selectors.DefaultSelector()
 database_setup(db_path)
 
+# Create an SSL context
+context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")  # Load server cert & key
+
 # Accept a new socket connection
 def accept_wrapper(sock):
     conn, addr = sock.accept()  # Should be ready to read
     print(f"Accepted connection from {addr}")
+
+    #Add Encryption
+    try:
+        conn = context.wrap_socket(conn, server_side=True, do_handshake_on_connect=False)
+    except ssl.SSLError as e:
+        print(f"SSL error: {e}")
+        conn.close()
+        return
+
     conn.setblocking(False) # Set non-blocking mode so other sockets can connect
     message = libserver.Message(sel, conn, addr, db_path=db_path, active_clients=active_clients)
-
     sel.register(conn, selectors.EVENT_READ, data=message)
 
 # Main loop
@@ -49,6 +62,12 @@ print(f"Listening on {(host, port)}")
 lsock.setblocking(False) # Set non-blocking mode so other sockets can connect
 sel.register(lsock, selectors.EVENT_READ, data=None)
 
+
+#Encrypt listening socket using SSL
+# lsock = context.wrap_socket(lsock, server_side=True)  # Wrap the listening socket in SSL
+# lsock.setblocking(False)
+# sel.register(lsock, selectors.EVENT_READ, data=None)
+
 try:
     while True:
         events = sel.select(timeout=None)
@@ -60,6 +79,8 @@ try:
                 message = key.data # Service existing connection
                 try:
                     message.process_events(mask)
+                except ssl.SSLWantReadError:
+                    print("SSL layer requires more data, waiting...")
                 except Exception:
                     print(
                         f"Main: Error: Exception for {message.addr}:\n"
