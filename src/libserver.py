@@ -4,6 +4,7 @@ import yaml
 import selectors
 import struct
 import time
+import ssl
 from codes import ResponseCode, OpCode
 from database import DatabaseHandler
 
@@ -53,6 +54,12 @@ class Message:
         except BlockingIOError:
             # Resource temporarily unavailable (errno EWOULDBLOCK)
             pass
+        except ssl.SSLWantReadError:
+            print("SSL handshake still ongoing or more data required")
+            return  # SSL handshake or read is pending, nothing to do yet
+        except ssl.SSLWantWriteError:
+            print("SSL handshake write is pending")
+            return  # SSL write is pending, nothing to do yet
         else:
             if data:
                 self._recv_buffer += data

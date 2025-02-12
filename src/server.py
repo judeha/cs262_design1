@@ -3,13 +3,13 @@ import socket
 import sys
 import traceback
 import yaml
-
 import libserver
-
-from datetime import datetime
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from datetime import datetime
 from database_setup import database_setup
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Read config file
 yaml_path = "config.yaml"
@@ -29,9 +29,9 @@ database_setup(db_path)
 def accept_wrapper(sock):
     conn, addr = sock.accept()  # Should be ready to read
     print(f"Accepted connection from {addr}")
+
     conn.setblocking(False) # Set non-blocking mode so other sockets can connect
     message = libserver.Message(sel, conn, addr, db_path=db_path, active_clients=active_clients)
-
     sel.register(conn, selectors.EVENT_READ, data=message)
 
 # Main loop
@@ -48,6 +48,7 @@ lsock.listen()
 print(f"Listening on {(host, port)}")
 lsock.setblocking(False) # Set non-blocking mode so other sockets can connect
 sel.register(lsock, selectors.EVENT_READ, data=None)
+
 
 try:
     while True:

@@ -6,6 +6,7 @@ import yaml
 import sys
 import tkinter as tk
 import threading
+import hashlib
 # import yaml
 from codes import OpCode 
 
@@ -208,3 +209,6 @@ class Message:
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
+                
+    def _hash_password(self, password):
+        return hashlib.sha256(password)
