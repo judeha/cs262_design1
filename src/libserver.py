@@ -206,6 +206,7 @@ class Message:
         return result
 
     def process_events(self, mask):
+        print("IN SERVER PROCESS EVENTS")
         if mask & selectors.EVENT_READ:
             self.read()
         if mask & selectors.EVENT_WRITE:
