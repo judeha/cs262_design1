@@ -117,6 +117,7 @@ class Message:
         
     def _generate_action(self, opcode, args):
         # TODO: catch input exceptions here
+        print(opcode)
         if opcode == OpCode.ACCOUNT_EXISTS.value:
             result = self.db.account_exists(*args)
             # parse result of account_exists, which is a bool
@@ -190,9 +191,6 @@ class Message:
                                        round(datetime.datetime.now().microsecond),
                                        False)
                 result = {"status_code": ResponseCode.SUCCESS.value}
-        elif opcode == OpCode.RECEIVE_MSG.value:
-            result = {"status_code": ResponseCode.SUCCESS.value}
-            pass
         elif opcode == OpCode.LOGOUT_ACCOUNT.value:
             try:
                 del self.active_clients[args[0]]
@@ -201,8 +199,9 @@ class Message:
                 result = {"status_code": ResponseCode.BAD_REQUEST.value} # TODO: return error message as data
             self.close()
         else:
-            result = {"status_code": ResponseCode.SUCCESS.value} #
-            pass # TODO: as exception or as unknown opcode status code? also could move to header
+            with Exception as e:
+                result = {"status_code": ResponseCode.SUCCESS.value} #
+            # TODO: as exception or as unknown opcode status code? also could move to header
             # NOTE: send an exception status code + data = exception message to client? or shouldn't be exposed. whole try loop
         return result
 

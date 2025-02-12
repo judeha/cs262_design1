@@ -30,36 +30,36 @@ class Message:
         self._header = None
         self.response = None
 
-        self.events = selectors.EVENT_READ | selectors.EVENT_WRITE
+        # self.events = selectors.EVENT_READ | selectors.EVENT_WRITE
 
 
-        # tkinter attributes
-        self.root = tk.Tk()
-        self.root.title("Multi-Client Chat System")
-        self.root.geometry("1000x700")
+        # # tkinter attributes
+        # self.root = tk.Tk()
+        # self.root.title("Multi-Client Chat System")
+        # self.root.geometry("1000x700")
 
-        self.container = tk.Frame(self.root)
-        self.container.pack(fill="both", expand=True)
+        # self.container = tk.Frame(self.root)
+        # self.container.pack(fill="both", expand=True)
 
-        self.frames = {}
-        self.setup_frames()
-        self.show_frame("main")  # Show the main frame initially
+        # self.frames = {}
+        # self.setup_frames()
+        # self.show_frame("main")  # Show the main frame initially
 
-        root_thread = threading.Thread(target=self.root.mainloop(), daemon=True)
-        root_thread.start()
+        # root_thread = threading.Thread(target=self.root.mainloop(), daemon=True)
+        # root_thread.start()
 
-    def create_request(self, opcode, args):
-        new_request =  dict(
-            # byteorder = sys.byteorder,
-            # content_type="json",
-            content_encoding="utf-8",
-            opcode = opcode,
-            content={"args": args},
-        )
-        # if new_request != self.request:
-        self.request = new_request
-        print(self.request)
-        self.selector.modify(self.sock, self.events, data=self)
+    # def create_request(self, opcode, args):
+    #     new_request =  dict(
+    #         # byteorder = sys.byteorder,
+    #         # content_type="json",
+    #         content_encoding="utf-8",
+    #         opcode = opcode,
+    #         content={"args": args},
+    #     )
+    #     # if new_request != self.request:
+    #     self.request = new_request
+    #     print(self.request)
+    #     self.selector.modify(self.sock, self.events, data=self)
 
     def setup_frames(self):
         """Creates and stores all the frames."""
@@ -287,9 +287,11 @@ class Message:
             pass
         else:
             if opcode == OpCode.ACCOUNT_EXISTS.value:
-                self.setup_login_frame()
+                # self.setup_login_frame()
+                pass
             elif opcode == OpCode.CREATE_ACCOUNT.value:
-                self.setup_home_frame()
+                # self.setup_home_frame()
+                pass
             elif opcode == OpCode.LOGIN_ACCOUNT.value:
                 print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
@@ -317,10 +319,10 @@ class Message:
                 print("Here are your messages: ", data[1:])
                 print("You have ", data[0], " unread messages.")
                 # TODO: display homepage
-            elif opcode == "send_msg":
+            elif opcode == OpCode.SEND_MSG.value:
                 pass
                 # TODO: display homepage
-            elif opcode == "receive_msg":
+            elif opcode == OpCode.RECEIVE_MSG.value:
                 print("You have a new message. Here are your messages: ", data)
                 # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
             else:
@@ -349,7 +351,7 @@ class Message:
     def write(self):
         if not self._request_queued:
             self.queue_request()
-
+        
         self._write()
 
         if self._request_queued and not self._send_buffer:
