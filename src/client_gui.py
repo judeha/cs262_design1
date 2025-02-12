@@ -5,10 +5,10 @@ import yaml
 import selectors
 import threading
 import os
-import ssl
 import tkinter as tk
 from tkinter import scrolledtext
 import queue
+import hashlib
 from codes import OpCode, ResponseCode
 from libclient import Message
 
@@ -79,6 +79,7 @@ class ChatGUI:
         self.root = root
         self.message_obj = message_obj
         self.incoming_queue = incoming_queue
+        self.username = None
 
         # Set up the main window
         self.root.title("MyChat")
@@ -461,13 +462,19 @@ class ChatGUI:
 
     def _on_create_account(self, username, password):
         # Call the server to create an account
-        self.send_message(OpCode.CREATE_ACCOUNT.value, [username.get(), password.get()])
+        self.send_message(OpCode.CREATE_ACCOUNT.value, 
+                          [username.get(), self._hash_password(password.get())])
+
+    def _hash_password(self, password):
+        return hashlib.sha256(password.encode()).hexdigest()
+
 
     def _on_login_account(self, username, password):
         # TODO: sketch
         self.username = username.get()
         self.password = password.get()
-        self.send_message(OpCode.LOGIN_ACCOUNT.value, [username.get(), password.get()])
+        self.send_message(OpCode.LOGIN_ACCOUNT.value, 
+                          [username.get(), self._hash_password(password.get())])
     
     def _on_delete_account(self, username, password):
         self.send_message(OpCode.DELETE_ACCOUNT.value, [username.get(), password.get()])
@@ -506,9 +513,6 @@ def start_connection(host, port, incoming_queue):
     except BlockingIOError:
         pass
 
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    secure_sock = context.wrap_socket(sock, server_hostname=host, do_handshake_on_connect=False)
-
     # Build initial request
     initial_request = {
         "content_encoding": "utf-8",
@@ -518,10 +522,10 @@ def start_connection(host, port, incoming_queue):
 
     # Create the Message object
     addr = (host, port)
-    msg_obj = Message(selector=sel, sock=secure_sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
+    msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
 
     # Register the socket with the selector
-    sel.register(secure_sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
+    sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
 
     return sel, msg_obj
 
