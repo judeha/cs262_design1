@@ -6,30 +6,31 @@ import yaml
 import sys
 import tkinter as tk
 import threading
-# import yaml
+import yaml
 from codes import ResponseCode, RESPONSE_MESSAGES, OpCode, OPCODE_MESSAGES 
 
-# Read config file
+#Read config file
 yaml_path = "config.yaml"
 with open(yaml_path) as y:
     config_dict = yaml.safe_load(y)
+
 version = config_dict["version"]
 key = config_dict["key"]
 db_path = config_dict["db_path"]
 
+
 class Message:
-    def __init__(self, selector, sock, addr, request, incoming_queue=None):
+    def __init__(self, selector, sock, addr):
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = request
+        self.request = None
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
         self._header_len = None
         self._header = None
         self.response = None
-        self.incoming_queue = incoming_queue
 
         # self.events = selectors.EVENT_READ | selectors.EVENT_WRITE
 
@@ -217,9 +218,14 @@ class Message:
     def _write(self):
         if self._send_buffer:
             print(f"Sending {self._send_buffer!r} to {self.addr}")
+             # Should be ready to write
+            if self.sock is None:
+                raise RuntimeError("Socket is None before writing")
+            if self.sock.fileno() == -1:
+                raise RuntimeError("Socket is closed before writing")
             try:
-                # Should be ready to write
                 sent = self.sock.send(self._send_buffer)
+
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
@@ -239,6 +245,8 @@ class Message:
 
     def _package_request(
         self, req):
+        print("IN PACKAGE REQUEST", req)
+
         # Encode content
         encoding = req["content_encoding"]
         content_bytes = self._json_encode(req["content"], encoding)
@@ -257,6 +265,8 @@ class Message:
         return message
     
     def _process_response(self):
+
+        print("IN PROCESS RESPONSE")
         # Check if request is fully received
         content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len: # TODO: exception
@@ -283,61 +293,63 @@ class Message:
         # self.close() # TODO: fix
 
     def _generate_action(self, opcode, status_code, data):
-        self.incoming_queue.put({"opcode": opcode, "status_code": status_code, "data": data})
-
         # TODO: enforce I/O
-        # if status_code != ResponseCode.SUCCESS.value:
-        #     self.incoming_queue.put({"opcode": {opcode}, "status_code": status_code, "data": data})
-        # else:
-        #     if opcode == OpCode.ACCOUNT_EXISTS.value:
-        #         # self.setup_login_frame()
-        #         self.incoming_queue.put({"opcode": {opcode}, "status_code": status_code, "data": data})
-        #     elif opcode == OpCode.CREATE_ACCOUNT.value:
-        #         # self.setup_home_frame()
-        #         pass
-        #     elif opcode == OpCode.LOGIN_ACCOUNT.value:
-        #         print("Here are your messages: ", data[1:])
-        #         print("You have ", data[0], " unread messages.")
-        #         # TODO: display homepage
-        #     elif opcode == OpCode.DELETE_ACCOUNT.value:
-        #         pass
-        #         # TODO: display create account page
-        #     elif opcode == OpCode.LIST_ACCOUNTS.value:
-        #         print("Here are all the accounts: ", [data])
-        #         # TODO: display accounts
-        #     elif opcode == OpCode.LOGOUT_ACCOUNT.value:
-        #         pass
-        #     elif opcode == OpCode.READ_MSG_DELIVERED.value:
-        #         print("Here are your messages: ", data[1:])
-        #         print("You have ", data[0], " unread messages.")
-        #         # TODO: display homepage
-        #     elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
-        #         print("Here are your messages: ", data[1])
-        #         print("You have ", data[0], " unread messages.")
-        #         # TODO: display updated homepage
-        #     elif opcode == OpCode.DELETE_MSG.value:
-        #         pass
-        #         # TODO: display updated homepage
-        #     elif opcode == OpCode.HOMEPAGE.value:
-        #         print("Here are your messages: ", data[1:])
-        #         print("You have ", data[0], " unread messages.")
-        #         # TODO: display homepage
-        #     elif opcode == OpCode.SEND_MSG.value:
-        #         pass
-        #         # TODO: display homepage
-        #     elif opcode == OpCode.RECEIVE_MSG.value:
-        #         print("You have a new message. Here are your messages: ", data)
-        #         # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
-        #     else:
-        #         print("Unknown opcode")
+        if status_code != ResponseCode.SUCCESS.value:
+            pass
+        else:
+            if opcode == OpCode.ACCOUNT_EXISTS.value:
+                # self.setup_login_frame()
+                pass
+            elif opcode == OpCode.CREATE_ACCOUNT.value:
+                # self.setup_home_frame()
+                pass
+            elif opcode == OpCode.LOGIN_ACCOUNT.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.DELETE_ACCOUNT.value:
+                pass
+                # TODO: display create account page
+            elif opcode == OpCode.LIST_ACCOUNTS.value:
+                print("Here are all the accounts: ", [data])
+                # TODO: display accounts
+            elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+                pass
+            elif opcode == OpCode.READ_MSG_DELIVERED.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
+                print("Here are your messages: ", data[1])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display updated homepage
+            elif opcode == OpCode.DELETE_MSG.value:
+                pass
+                # TODO: display updated homepage
+            elif opcode == OpCode.HOMEPAGE.value:
+                print("Here are your messages: ", data[1:])
+                print("You have ", data[0], " unread messages.")
+                # TODO: display homepage
+            elif opcode == OpCode.SEND_MSG.value:
+                pass
+                # TODO: display homepage
+            elif opcode == OpCode.RECEIVE_MSG.value:
+                print("You have a new message. Here are your messages: ", data)
+                # TODO: display homepage UNLESS they are viewing all the account lists. hannah pls decide
+            else:
+                print("Unknown opcode")
 
     def process_events(self, mask):
+        print("IN PROCESS EVENTS")
+
         if mask & selectors.EVENT_READ:
             self.read()
         if mask & selectors.EVENT_WRITE:
             self.write()
 
     def read(self):
+        print("IN READ")
+
         self._header_len = None
         self._header = None
         self.response = None
@@ -356,8 +368,14 @@ class Message:
             self._process_response()
 
     def write(self):
+        print("IN WRITE")
+
         if not self._request_queued:
+            self.queue_request(self.request)
+
             self.queue_request()
+        
+        print("SEND_BUFFER", self._send_buffer)
         
         self._write()
 
@@ -383,8 +401,10 @@ class Message:
             # Delete reference to socket object for garbage collection
             self.sock = None
 
-    def queue_request(self):
-        message = self._package_request(self.request)
+    def queue_request(self, request):
+        print("IN QUEUE REQUEST")
+        self.queue_request = request
+        message = self._package_request(request)
         self._send_buffer += message
         self._request_queued = True
         
@@ -420,3 +440,24 @@ class Message:
             ):
                 if reqhdr not in self._header:
                     raise ValueError(f"Missing required header '{reqhdr}'.")
+                
+    def process_content(self):
+        # Check if request is fully received
+        content_len = self._header["content_length"]
+        if not len(self._recv_buffer) >= content_len: # TODO: exception
+            return
+        
+        # Save data from receive buffer
+        data = self._recv_buffer[:content_len]
+        self._recv_buffer = self._recv_buffer[content_len:]
+
+        # Decode response data
+        encoding = self._header["content_encoding"]
+        self.response = self._json_decode(data, encoding)
+        print(f"Received response {self.response!r} from {self.addr}")
+
+        # Process response content
+        self._process_response()
+
+        # Close when response has been processed
+        # self.close()
