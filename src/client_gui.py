@@ -11,7 +11,7 @@ from tkinter import scrolledtext
 import queue
 import hashlib
 from codes import OpCode, ResponseCode
-from libclient import Message
+from libclient import Message, MessageCustom
 import random
 
 # Read config file
@@ -412,58 +412,6 @@ class ChatGUI:
         self.accounts_display.config(state='disabled')  # Disable editing again
         self.accounts_display.see(tk.END)  # Auto-scroll to latest message
     
-    def setup_list_accounts_frame(self):
-        frame = tk.Frame(self.container, bg=BG_COLOR)
-        tk.Label(frame, text="List of Accounts").pack(pady=5)
-
-        # Create a frame for accounts list (side by side)
-        accounts_frame = tk.Frame(frame)
-        accounts_frame.pack(fill='both', expand=True)
-
-        # Chatbox (read-only text widget)
-        self.accounts_display = tk.Text(accounts_frame, width=50, height=20, state='disabled', wrap='word')
-        self.accounts_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
-
-        # Home button
-        home_btn = tk.Button(frame, text='Homepage', command=lambda: self.show_frame("homepage")) # TODO: should you fetch homepage again?
-        home_btn.pack(side='left', padx=5)
-
-        return frame
-
-    def setup_my_matches_frame(self):
-        pass
-
-    def setup_frames(self):
-        self.frames["main"] = self.setup_main_frame()
-        self.frames["create_account"] = self.setup_create_account_frame()
-        self.frames["login"] = self.setup_login_frame()
-        self.frames["homepage"] = self.setup_homepage_frame()
-        self.frames["list_accounts"] = self.setup_list_accounts_frame()
-        # self.frames["my_matches"] = self.setup_my_matches_frame()
-
-        for frame in self.frames.values():
-            # Place each frame in the same row/column so they overlap
-            frame.grid(row=0, column=0, sticky="nsew")
-
-    def show_frame(self, frame_name):
-        """Brings the specified frame to the front."""
-        self.frames[frame_name].tkraise()
-        # self.frames[frame_name].pack()
-
-        # If switching to homepage, refresh messages
-        if frame_name == "homepage":
-            self.display_messages()
-        
-        if frame_name == "list_accounts":
-            self.display_accounts()
-
-    # def _append_chat(self, text):
-    #     """Helper to insert text into the chat display."""
-    #     self.chat_display.config(state='normal')
-    #     self.chat_display.insert(tk.END, text + "\n")
-    #     self.chat_display.config(state='disabled')
-    #     self.chat_display.see(tk.END)
-
     def _on_check_username(self, username):
         # Call the server to check if the username exists
         self.send_message(OpCode.ACCOUNT_EXISTS.value, [username.get()])
@@ -513,7 +461,7 @@ class ChatGUI:
 # Main Client Launcher
 # -----------------------------------------------------------------------------
 
-def start_connection(host, port, incoming_queue):
+def start_connection(host, port, incoming_queue, protocol=0):
     """
     Creates a non-blocking socket, registers it with a selector using
     our libclient.Message class, and returns (selector, message_obj).
@@ -538,7 +486,10 @@ def start_connection(host, port, incoming_queue):
 
     # Create the Message object
     addr = (host, port)
-    msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
+    if not protocol:
+        msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
+    else:
+        msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
 
     # Register the socket with the selector
     sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
@@ -548,12 +499,13 @@ def start_connection(host, port, incoming_queue):
 def main(args):
     host = args.host # TODO: put in config?
     port = args.port
+    protocol = args.protocol
 
     # A queue for receiving messages from the server in the main thread
     incoming_queue = queue.Queue()
 
     # 1) Set up socket + selector + register them with an initial request
-    sel, message_obj = start_connection(host, port, incoming_queue)
+    sel, message_obj = start_connection(host, port, incoming_queue, protocol)
 
     # 2) Create a stop event so we can shut down the selector thread
     stop_event = threading.Event()
@@ -583,6 +535,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=65432)
+    parser.add_argument("--protocol", default=0)
     args = parser.parse_args()
 
     main(args)

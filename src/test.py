@@ -17,3 +17,10 @@ print(lst)
 
 emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
 print(emojis[0])
+
+test = [8, "hi", False]
+a = "|".join(map(str, test)).encode("utf-8")
+print(a)
+print(type(a))
+b = a.decode("utf-8").split("|")
+print(b)

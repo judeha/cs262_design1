@@ -266,7 +266,7 @@ class Message:
             print(f"Error: socket.close() exception for {self.addr}: {e!r}")
         finally:
             # Delete reference to socket object for garbage collection
-            # NOTE: new
+            # TODO: cleanup, redundant
             if hasattr(self, 'active_clients'):
                 for username, client_sock in list(self.active_clients.items()):
                     if client_sock == self.sock:
@@ -323,4 +323,67 @@ class Message:
         print(f"Received request {self.request!r} from {self.addr}")
         
         # Set selector to listen for write events, we're done reading.
+        self._set_selector_events_mask("w")
+
+class MessageCustom(Message):
+    def __init__(self, selector, sock, addr, db_path, active_clients={}):
+        """Inherits everything from Message except overridden methods."""
+        super().__init__(selector, sock, addr, db_path, active_clients)  # Call parent constructor
+        self.db = DatabaseHandler(db_path)  # Database handler
+        self.active_clients = active_clients
+
+    def _package_response(self, response):
+        """Custom response packaging using '|' as a separator instead of JSON."""
+        # Encode content
+        content_data = [response["status_code"]] + response.get("data", [])
+        content_bytes = "|".join(map(str, content_data)).encode(self._header["content_encoding"])
+    
+        # Encode header in custom format
+        jsonheader = self._header
+        jsonheader["content_length"] = str(len(content_bytes))
+        jsonheader_bytes = f"{jsonheader['content_encoding']}|{jsonheader['content_length']}|{jsonheader['opcode']}".encode(self._header['content_encoding'])
+
+        # Encode protoheader and package message
+        message_hdr = struct.pack(">H", version) + struct.pack(">H", len(jsonheader_bytes))
+        message = message_hdr + jsonheader_bytes + content_bytes
+        return message
+
+    def process_header(self):
+        """Custom header processing using '|' separator instead of JSON."""
+        hdrlen = self._header_len
+        if len(self._recv_buffer) >= hdrlen:
+            header_str = self._recv_buffer[:hdrlen].decode("utf-8")
+            self._recv_buffer = self._recv_buffer[hdrlen:]
+
+            try:
+                encoding, content_length, opcode = header_str.split("|")
+                self._header = {
+                    "content_encoding": encoding,
+                    "content_length": int(content_length),
+                    "opcode": int(opcode),
+                }
+            except ValueError:
+                raise ValueError("Invalid header format")
+
+            for reqhdr in ("content_encoding", "content_length", "opcode"):
+                if reqhdr not in self._header:
+                    raise ValueError(f"Missing required header '{reqhdr}'.")
+
+    def process_content(self):
+        """Custom content processing using '|' separator instead of JSON."""
+        content_len = int(self._header["content_length"])
+        if len(self._recv_buffer) < content_len:
+            return  # Not enough data yet
+        
+        # Extract and decode content
+        data = self._recv_buffer[:content_len]
+        self._recv_buffer = self._recv_buffer[content_len:]
+
+        encoding = self._header["content_encoding"]
+        request = data.decode(encoding).split("|")
+        self.request = {"args": request}
+
+        print(f"Received request {self.request!r} from {self.addr}")
+
+        # Set selector to listen for write events, indicating readiness
         self._set_selector_events_mask("w")

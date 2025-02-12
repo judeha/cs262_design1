@@ -7,15 +7,8 @@ min_password_len: 1
 max_password_len: 100
 min_message_len: 1
 max_message_len: 4000
-<<<<<<< Updated upstream
 max_view: 10
 
 bg_color: "#043927"
 btn_txt_color: "#000000"
 btn_bg_color: "#043927"
-=======
-
-bg_color: "#043729"
-btn_txt_color: "#FFFFFF"
-btn_bg_color: "#043729"
->>>>>>> Stashed changes
