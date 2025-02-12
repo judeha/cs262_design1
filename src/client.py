@@ -32,7 +32,7 @@ def create_request(opcode, args):
     )
 
 # Create a new connection to the server
-def start_connection(host, port, request):
+def start_connection(host, port, request=None):
     addr = (host, port)
     print(f"Starting connection to {addr}")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,21 +47,35 @@ if len(sys.argv) != 3:
     print(f"Usage: {sys.argv[0]} <host> <port>")
     sys.exit(1)
 
-# host, port = sys.argv[1], int(sys.argv[2])
+host, port = sys.argv[1], int(sys.argv[2])
 # action, args = sys.argv[3], sys.argv[4]
 # args = ast.literal_eval(args) # TODO: transform tkinter gui to args
 # request = create_request(action, args)
-# start_connection(host, port, request)
+start_connection(host, port)
 
 if __name__ == "__main__":
     # #Start the GUI 
-    ui = UI()
-    ui.root.mainloop()
+    # ui = UI()
+    # ui.root.mainloop()
+
+    # if user_clicked_login:
+    #     action = "login_account"
+    #     args = [username, password]
+    #     request = create_request(action, args)
+    #     start_connection(host, port, request)
+
+    # if user_clicked_create:
+    #     # create new request
+    #     request = create_request(# whatever info passed in by tkinter)
+    #     message.request = request
+    #     message.process_events()
+    #     display(message.page)
 
     #Open the socket connection 
     try:
         while True:
             events = sel.select(timeout=1)
+            print("Main: events", events)
             for key, mask in events: 
                 message = key.data 
                 try:
