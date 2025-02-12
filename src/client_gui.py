@@ -134,13 +134,11 @@ class ChatGUI:
                 status_code = response_str["status_code"]
                 data = response_str["data"]
 
-
                 if opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
                     print("HERE")
                     pass # TODO: display error
                 else:
                     if opcode == OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
-                        print("exists, create account")
                         self.show_frame("create_account") # TODO: replace with opcode
                     elif opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.SUCCESS.value:
                         self.show_frame("login")
@@ -204,13 +202,13 @@ class ChatGUI:
     def setup_login_frame(self):
         frame = tk.Frame(self.container)
         tk.Label(frame, text="Username:").pack(pady=5)
-        self.username_entry = tk.Entry(frame)
-        self.username_entry.pack(pady=5)
+        username = tk.Entry(frame)
+        username.pack(pady=5)
         tk.Label(frame, text="Password:").pack(pady=5)
-        self.password_entry = tk.Entry(frame, show="*")
-        self.password_entry.pack(pady=5)
+        password = tk.Entry(frame, show="*")
+        password.pack(pady=5)
 
-        login_btn = tk.Button(frame, text="Login", command=lambda: self.send_message(OpCode.LOGIN_ACCOUNT.value))
+        login_btn = tk.Button(frame, text="Login", command=lambda: self._on_login_account(username, password))
         login_btn.pack(pady=10)
         
         return frame
@@ -277,6 +275,10 @@ class ChatGUI:
     def _on_create_account(self, username, password):
         # Check if username exists
         self.send_message(OpCode.CREATE_ACCOUNT.value, [username.get(), password.get()])
+
+    def _on_login_account(self, username, password):
+        # Check if username exists
+        self.send_message(OpCode.LOGIN_ACCOUNT.value, [username.get(), password.get()])
 
 # -----------------------------------------------------------------------------
 # Main Client Launcher
