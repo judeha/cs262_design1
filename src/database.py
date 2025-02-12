@@ -4,8 +4,6 @@ from codes import ResponseCode
 from typing import Union
 import yaml
 
-# TODO: logging
-
 # Read config file
 yaml_path = "config.yaml"
 with open(yaml_path) as y:
@@ -90,7 +88,7 @@ class DatabaseHandler():
         """ Return a list of all accounts """
         try:
             # Fetch all accounts
-            self.cursor.execute("SELECT * FROM accounts")
+            self.cursor.execute("SELECT id, username FROM accounts")
             accounts = self.cursor.fetchall()
             return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
@@ -99,6 +97,12 @@ class DatabaseHandler():
     def insert_message(self, sender, receiver, content, timestamp: int, delivered: bool) -> dict[int]:
         """ Given message content, return message insertion status """
         try:
+            # Check both accounts exist
+            if not self.account_exists(sender) or not self.account_exists(receiver):
+                return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+            # Enforce message constraints
+            if len(content) < min_message_len or len(content) > max_message_len:
+                return {"status_code": ResponseCode.BAD_REQUEST.value}
             # Insert message
             self.cursor.execute("INSERT INTO messages (sender, receiver, content, timestamp, delivered) VALUES (?, ?, ?, ?, ?)", 
                 (sender, receiver, content, timestamp, delivered))
@@ -168,9 +172,7 @@ class DatabaseHandler():
             # Check if account exists
             self.cursor.execute("SELECT * FROM accounts WHERE username=?", (username,))
             user = self.cursor.fetchone()
-            if user is not None:
-                return {"status_code": ResponseCode.SUCCESS.value, "data": []}
-            # else:
+            return user is not None
         except sqlite3.Error as e:
             return -1
     
