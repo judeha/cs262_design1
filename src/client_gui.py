@@ -21,8 +21,11 @@ with open(yaml_path) as y:
 BG_COLOR = config_dict['bg_color']
 BTN_TXT_COLOR = config_dict['btn_txt_color']
 BTN_BG_COLOR = config_dict['btn_bg_color']
-max_view = config_dict['max_view']
-emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"] # TODO: put in config
+host = config_dict['host']
+port = config_dict['port']
+ui_dimensions = config_dict['ui_dimensions']
+content_encoding = config_dict['encoding']
+emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
 
 # TODO: logging
 # TODO: error enforcement
@@ -84,11 +87,12 @@ class ChatGUI:
         self.root = root
         self.message_obj = message_obj
         self.incoming_queue = incoming_queue
-        self.username = None
+        self.username = "Guest"
+        #TODO: Make sure that username updates on the UI for homepage
 
         # Set up the main window
         self.root.title("MyChat")
-        self.root.geometry("800x600") # TODO: put in config
+        self.root.geometry(ui_dimensions) 
         self.container = tk.Frame(root, bg=BG_COLOR)
         self.container.pack(expand=True, fill=tk.BOTH)
 
@@ -113,7 +117,7 @@ class ChatGUI:
         if opcode is not None:
             # Here is where you craft the request dictionary that your `Message` object expects
             request = dict(
-                content_encoding= "utf-8", # TODO: put in config
+                content_encoding= content_encoding, 
                 opcode=opcode,
                 content= {"args": args},
             )
@@ -243,21 +247,22 @@ class ChatGUI:
 
         # Error message (initially hidden)
         self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
-        self.error_label.pack(pady=5)  # Show at the top
+        self.error_label.pack(pady=5,)  # Show at the top
 
         # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
-        username.pack(pady=5)
+        username.pack(pady=5, padx=20)
         tk.Label(frame, text="Password:").pack(pady=5)
         password = tk.Entry(frame, show="*")
-        password.pack(pady=5)
+        password.pack(pady=5,padx=20)
 
         # Next button
         login_btn = tk.Button(frame, text="Login", command=lambda: self._on_login_account(username, password))
         login_btn.pack(pady=10)
         
         return frame
+    
 
     def setup_homepage_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
@@ -267,6 +272,7 @@ class ChatGUI:
             text = f"Welcome, {self.username}!"
         else:
             text = "MyChat"
+
         tk.Label(frame, text=text).pack(pady=5)
         # Error message (initially hidden)
         self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
@@ -275,11 +281,14 @@ class ChatGUI:
         # Create a frame for chat display and accounts list (side by side)
         chat_frame = tk.Frame(frame)
         chat_frame.pack(fill='both', expand=False)
+
         # Scrollbar for chat display
         scrollbar = tk.Scrollbar(chat_frame)
         scrollbar.pack(side='right', fill='y')
         # Chatbox (read-only text widget)
-        self.chat_display = tk.Text(chat_frame, width=50, height=20, state='disabled', wrap='word', yscrollcommand=scrollbar.set)
+        self.chat_display = tk.Text(chat_frame, width=50, height=20, 
+                                    state='disabled', wrap='word', 
+                                    yscrollcommand=scrollbar.set)
         self.chat_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
         scrollbar.config(command=self.chat_display.yview)  # Link scrollbar
 
@@ -289,9 +298,13 @@ class ChatGUI:
 
         # Receiver, message entry fields
         receiver_entry = tk.Entry(input_frame)
-        receiver_entry.pack(side='left', padx=10, fill="x", expand=True)
+        self._set_placeholder(receiver_entry, "Receiver:")
+
+        receiver_entry.pack(side='left', padx=10, fill="x", expand=False)
         message_entry = tk.Entry(input_frame)
-        message_entry.pack(side='left', padx=10, fill="x", expand=True)
+        self._set_placeholder(message_entry, "Type your message...")
+
+        message_entry.pack(side='left', padx=20, fill="x", expand=True)
         receiver_label = tk.Label(frame, text="recipient", fg=BG_COLOR, highlightbackground=BG_COLOR)
         receiver_label.pack(side='left', padx=50)
         message_label = tk.Label(frame, text="your message", fg=BG_COLOR, highlightbackground=BG_COLOR)
@@ -303,34 +316,34 @@ class ChatGUI:
 
         # Delete Account button
         delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self._on_delete_account(self.username, self.password))
-        delete_acc_btn.pack(side='top', fill='x', pady=5)
+        delete_acc_btn.pack(side='top', pady=5)
 
         # Add "Delete Messages" button
         delete_msgs_entry = tk.Entry(input_frame)
-        delete_msgs_entry.pack(side='right', padx=5)
+        delete_msgs_entry.pack(side='right')
         delete_btn = tk.Button(input_frame, text="Delete Messages", command=lambda: self._on_delete_messages(self.username, delete_msgs_entry))
-        delete_btn.pack(side='top', fill='x', pady=5)
+        delete_btn.pack(side='top', pady=5)
 
         # List Account button
         list_acc_entry = tk.Entry(input_frame)
-        list_acc_entry.pack(side='right', padx=5)
+        list_acc_entry.pack(side='right')
         list_acc_btn = tk.Button(input_frame, text='List Account', command=lambda: self._on_list_accounts(list_acc_entry)) # TODO change to text field
-        list_acc_btn.pack(side='top', fill='x', pady=5)
+        list_acc_btn.pack(side='top', pady=5)
 
         # Fetch last X delivered messages button
         num_read_msgs_entry = tk.Entry(input_frame)
-        num_read_msgs_entry.pack(side='right', padx=5)
+        num_read_msgs_entry.pack(side='right')
         fetch_read_btn = tk.Button(input_frame, text='See older messages', command=lambda: self._on_fetch_read_message( num_read_msgs_entry))
-        fetch_read_btn.pack(side='top', fill='x', pady=5)
+        fetch_read_btn.pack(side='top', pady=5)
         
         # Fetch last Y undelivered messages button
         num_unread_msgs_entry = tk.Entry(input_frame)
-        num_unread_msgs_entry.pack(side='right', padx=5)
+        num_unread_msgs_entry.pack(side='right')
         fetch_unread_btn = tk.Button(input_frame, text='See new messages', command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
-        fetch_unread_btn.pack(side='top', fill='x', pady=5)
+        fetch_unread_btn.pack(side='top', pady=5)
 
         return frame
-    
+
     def setup_list_accounts_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
         tk.Label(frame, text="List of Accounts").pack(pady=5)
@@ -363,6 +376,7 @@ class ChatGUI:
         for frame in self.frames.values():
             # Place each frame in the same row/column so they overlap
             frame.grid(row=0, column=0, sticky="nsew")
+
 
     def show_frame(self, frame_name):
         """Brings the specified frame to the front."""
@@ -445,6 +459,7 @@ class ChatGUI:
             # Place each frame in the same row/column so they overlap
             frame.grid(row=0, column=0, sticky="nsew")
 
+
     def show_frame(self, frame_name):
         """Brings the specified frame to the front."""
         self.frames[frame_name].tkraise()
@@ -463,6 +478,22 @@ class ChatGUI:
     #     self.chat_display.insert(tk.END, text + "\n")
     #     self.chat_display.config(state='disabled')
     #     self.chat_display.see(tk.END)
+    def _set_placeholder(self, entry, placeholder_text):
+        """Set placeholder text and bind events"""
+        entry.insert(0, placeholder_text)
+        entry.bind("<FocusIn>", lambda e: self.clear_placeholder(e, placeholder_text))
+        entry.bind("<FocusOut>", lambda e: self.add_placeholder(e, placeholder_text))
+
+    def clear_placeholder(self, event, placeholder_text):
+        """Clear placeholder text when the entry field is focused"""
+        if event.widget.get() == placeholder_text:
+            event.widget.delete(0, tk.END)
+
+    def add_placeholder(self, event, placeholder_text):
+        """Restore the placeholder text if the entry is empty"""
+        if event.widget.get() == "":
+            event.widget.insert(0, placeholder_text)
+
 
     def _on_check_username(self, username):
         # Call the server to check if the username exists
@@ -475,7 +506,6 @@ class ChatGUI:
 
     def _hash_password(self, password):
         return hashlib.sha256(password.encode()).hexdigest()
-
 
     def _on_login_account(self, username, password):
         # TODO: sketch
@@ -513,7 +543,7 @@ class ChatGUI:
 # Main Client Launcher
 # -----------------------------------------------------------------------------
 
-def start_connection(host, port, incoming_queue):
+def start_connection(incoming_queue):
     """
     Creates a non-blocking socket, registers it with a selector using
     our libclient.Message class, and returns (selector, message_obj).
@@ -531,7 +561,7 @@ def start_connection(host, port, incoming_queue):
 
     # Build initial request
     initial_request = {
-        "content_encoding": "utf-8",
+        "content_encoding": content_encoding,
         "opcode": -1,
         "content": {"args": []},  # TODO: fragile
     }
@@ -545,15 +575,12 @@ def start_connection(host, port, incoming_queue):
 
     return sel, msg_obj
 
-def main(args):
-    host = args.host # TODO: put in config?
-    port = args.port
-
+def main():
     # A queue for receiving messages from the server in the main thread
     incoming_queue = queue.Queue()
 
     # 1) Set up socket + selector + register them with an initial request
-    sel, message_obj = start_connection(host, port, incoming_queue)
+    sel, message_obj = start_connection(incoming_queue)
 
     # 2) Create a stop event so we can shut down the selector thread
     stop_event = threading.Event()
@@ -581,9 +608,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=65432)
+    parser.add_argument("--host", default=host)
+    parser.add_argument("--port", type=int, default=port)
     args = parser.parse_args()
 
-    main(args)
+    main()
 
