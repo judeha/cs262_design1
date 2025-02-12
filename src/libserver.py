@@ -14,9 +14,11 @@ with open(yaml_path) as y:
 version = config_dict["version"]
 key = config_dict["key"]
 db_path = config_dict["db_path"] # TODO: can probably pass in the main server file
+min_message_len = config_dict["min_message_len"]
+max_message_len = config_dict["max_message_len"]
 
 class Message:
-    def __init__(self, selector, sock, addr, db_path="messages.db"):
+    def __init__(self, selector, sock, addr, db_path="messages.db", active_clients={}):
         self.selector = selector
         self.sock = sock
         self.addr = addr
@@ -27,7 +29,7 @@ class Message:
         self.request = None
         self.response_created = False
         self.db = DatabaseHandler(db_path) # TODO: should we move this outside?
-        self.active_clients = {} # TODO: in-session tracking improved?
+        self.active_clients = active_clients
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -117,7 +119,10 @@ class Message:
         # TODO: catch input exceptions here
         if opcode == OpCode.ACCOUNT_EXISTS.value:
             result = self.db.account_exists(*args)
-            if result:
+            # parse result of account_exists, which is a bool
+            if not result:
+                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+            else:
                 result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value} # TODO: cleanup
         elif opcode == OpCode.CREATE_ACCOUNT.value:
             result = self.db.create_account(*args)
@@ -125,8 +130,7 @@ class Message:
             result = self.db.login_account(*args)
             # Add to active clients
             if result["status_code"] == ResponseCode.SUCCESS.value:
-                pass
-                # self.active_clients[result["data"]["username"]] = self.sock
+                self.active_clients[args[0]] = self
         elif opcode == OpCode.LIST_ACCOUNTS.value:
             result = self.db.list_accounts()
         elif opcode == OpCode.DELETE_ACCOUNT.value:
@@ -140,25 +144,61 @@ class Message:
         elif opcode == OpCode.DELETE_MSG.value:
             result = self.db.delete_messages(*args)
         elif opcode == OpCode.SEND_MSG.value:
-            # Check if receiver exists
-            if not self.db.account_exists(args[1]):
-                result = {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
-                return result
-            # TODO: Check if receiver is online. verify sending
-            msg_sent = True
-            if not msg_sent:
-                result = {"status_code": ResponseCode.MESSAGE_SEND_FAILURE.value}
-                delivered = False
+            sender = args[0]
+            receiver = args[1]
+            msg_content = args[2]
+            # Check both accounts exist
+            if not self.db.account_exists(args[0]) or not self.db.account_exists(args[1]):
+                return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+            # Enforce message constraints
+            if len(args[2]) < min_message_len or len(args[2]) > max_message_len:
+                return {"status_code": ResponseCode.BAD_REQUEST.value}
+            # If receiver online: try sending immediately
+            if args[1] in self.active_clients:
+                try:
+
+                    # We have a Message object for the receiver
+                    receiver_msg = self.active_clients[receiver]
+                
+                    # Construct a new header or payload for the receiver
+                    response = {
+                        "status_code": ResponseCode.SUCCESS.value,
+                        "data": [(*args, round(datetime.datetime.now().microsecond), True)]
+                    }
+                    
+                    # Temporarily update our opcode to "RECEIVE_MSG" 
+                    old_opcode = self._header["opcode"]
+                    self._header["opcode"] = OpCode.RECEIVE_MSG.value
+                    #TODO: modify _package_response to take opcode as an argument
+
+                    # Build the message
+                    packaged = self._package_response(response)
+                    self._header["opcode"] = old_opcode
+
+                    # 3) Send data by appending to the receiver's buffer
+                    receiver_msg._send_buffer += packaged
+                    # Ensure the receiver is listening for EVENT_WRITE
+                    receiver_msg._set_selector_events_mask("w")
+
+                    # Insert message into database
+                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), True)
+                except Exception as e:
+                    result = self.db.insert_message(*args, round(datetime.datetime.now().microsecond), False)
             else:
-                delivered = True
-            # Insert message into database
-            timestamp = round(datetime.datetime.now().microsecond)
-            result = self.db.insert_message(*self.request, timestamp, delivered)
+                # If user not online, just store in DB
+                self.db.insert_message(sender, receiver, msg_content,
+                                       round(datetime.datetime.now().microsecond),
+                                       False)
+                result = {"status_code": ResponseCode.SUCCESS.value}
         elif opcode == OpCode.RECEIVE_MSG.value:
             result = {"status_code": ResponseCode.SUCCESS.value}
             pass
-        elif opcode == OpCode.LOGOUT_ACCOUNT.value: # TODO: is this ok?
-            result = {"status_code": ResponseCode.SUCCESS.value}
+        elif opcode == OpCode.LOGOUT_ACCOUNT.value:
+            try:
+                del self.active_clients[args[0]]
+                result = {"status_code": ResponseCode.SUCCESS.value}
+            except ValueError as e:
+                result = {"status_code": ResponseCode.BAD_REQUEST.value} # TODO: return error message as data
             self.close()
         else:
             result = {"status_code": ResponseCode.SUCCESS.value} #

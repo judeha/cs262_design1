@@ -19,6 +19,8 @@ version = config_dict["version"]
 key = config_dict["key"]
 db_path = config_dict["db_path"]
 
+active_clients = {} # key: username, value: socket
+
 # Set up selector and database
 sel = selectors.DefaultSelector()
 database_setup(db_path)
@@ -28,7 +30,8 @@ def accept_wrapper(sock):
     conn, addr = sock.accept()  # Should be ready to read
     print(f"Accepted connection from {addr}")
     conn.setblocking(False) # Set non-blocking mode so other sockets can connect
-    message = libserver.Message(sel, conn, addr)
+    message = libserver.Message(sel, conn, addr, db_path=db_path, active_clients=active_clients)
+
     sel.register(conn, selectors.EVENT_READ, data=message)
 
 # Main loop

@@ -102,6 +102,9 @@ class DatabaseHandler():
             # Check both accounts exist
             if not self.account_exists(sender) or not self.account_exists(receiver):
                 return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
+            # Enforce message constraints
+            if len(content) < min_message_len or len(content) > max_message_len:
+                return {"status_code": ResponseCode.BAD_REQUEST.value}
             # Insert message
             self.cursor.execute("INSERT INTO messages (sender, receiver, content, timestamp, delivered) VALUES (?, ?, ?, ?, ?)", 
                 (sender, receiver, content, timestamp, delivered))
