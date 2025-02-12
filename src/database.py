@@ -17,6 +17,7 @@ max_username_len = config_dict["max_username_len"]
 max_password_len = config_dict["max_password_len"]
 min_message_len = config_dict["min_message_len"]
 max_message_len = config_dict["max_message_len"]
+max_view = config_dict["max_view"]
 
 class DatabaseHandler():
     def __init__(self, path):
@@ -75,7 +76,7 @@ class DatabaseHandler():
         """ Given a username, return homepage data: count of unread messages and a list of last 5 read messages """
         try:
             # Fetch up to last 5 messages
-            self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT 5", (username,)) # TODO: add 5 to config, restructure config
+            self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?", (username,max_view,)) # TODO: add 5 to config, restructure config
             messages = self.cursor.fetchall()
             # Count unread messages
             count = self.count_messages(username, False)

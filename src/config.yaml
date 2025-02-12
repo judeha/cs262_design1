@@ -7,7 +7,7 @@ min_password_len: 1
 max_password_len: 100
 min_message_len: 1
 max_message_len: 4000
-max_view: 10
+max_view: 5
 
 bg_color: "#043927"
 btn_txt_color: "#000000"
