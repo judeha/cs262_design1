@@ -8,6 +8,7 @@ class ResponseCode(Enum):
     MESSAGE_SEND_FAILURE = 5001
     DATABASE_ERROR = 5000
     BAD_REQUEST = 4000
+    STARTING = -1
 
 RESPONSE_MESSAGES = {
     ResponseCode.SUCCESS: "Operation successful",
@@ -26,6 +27,7 @@ class Schema(Enum):
 
 
 class OpCode(Enum):
+    STARTING = -1 # TODO: fragile
     ACCOUNT_EXISTS = 0
     CREATE_ACCOUNT = 1
     LOGIN_ACCOUNT = 2
