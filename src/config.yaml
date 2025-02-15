@@ -1,18 +1,25 @@
+# Protocol config
 version: 1
-key: 0
+protocol: 0
+encoding: "utf-8"
+
+# Server config
+host: "127.0.0.1"
+port: 65432
 db_path: "messages.db"
+
+# Client request limitations
 min_username_len: 1
 max_username_len: 100
 min_password_len: 1
 max_password_len: 100
 min_message_len: 1
 max_message_len: 4000
-host: "127.0.0.1"
-port: 65432
-ui_dimensions: "800x500"
-encoding: "utf-8"
-max_view: 4000
 
+# Client display config
+max_view: 5 # Number of messages to display at once
+ui_dimensions: "800x500"
 bg_color: "#043729"
 btn_txt_color: "#FFFFFF"
 btn_bg_color: "#B2D3C2"
+emojis: ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]

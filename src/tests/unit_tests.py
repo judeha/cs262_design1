@@ -4,11 +4,8 @@ import os
 import hashlib
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from database import DatabaseHandler  # Assuming this is saved as database_handler.py
-from database_setup import database_setup
-from codes import ResponseCode
-from custom_protocol import encode_protocol, decode_protocol
-from client_gui import ChatGUI 
+from database import DatabaseHandler
+from utils import database_setup, ResponseCode, encode_protocol, decode_protocol
 
 db_path = "test_messages.db"
 
