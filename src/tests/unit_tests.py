@@ -1,11 +1,16 @@
 import unittest
 import sys
 import os
+import struct
 import hashlib
+from unittest.mock import MagicMock, patch
+import selectors
+import socket
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from database import DatabaseHandler
-from utils import database_setup, ResponseCode, encode_protocol, decode_protocol
+from utils import database_setup, ResponseCode, OpCode, encode_protocol, decode_protocol
+from client_handler import Message, MessageCustom
 
 db_path = "test_messages.db"
 
@@ -231,13 +236,6 @@ class TestDatabaseHandler(unittest.TestCase):
         self.assertEqual(response["status_code"], ResponseCode.SUCCESS.value)
         self.assertEqual(len(response["data"]), 0)
 
-    # def test_fetch_homepage_sql_injection(self):
-    #     """Test if homepage fetching is vulnerable to SQL injection."""
-    #     self.db.create_account("normaluser", "password")
-    #     response = self.db.fetch_homepage("'; DROP TABLE accounts; --")
-    #     print(response)
-    #     self.assertEqual(response["status_code"], ResponseCode.DATABASE_ERROR.value) # TODO: should check for suspicious content, perhaps disallow ; char
-
     def test_count_messages_invalid_user(self):
         """Test counting messages for a non-existent user."""
         count = self.db.count_messages("fakeuser", True)
@@ -300,13 +298,6 @@ class TestProtocolEncoding(unittest.TestCase):
         decoded = decode_protocol(encoded)
         self.assertEqual(decoded, original)
 
-    # def test_large_numbers(self):
-    #     """Test encoding and decoding of large numbers."""
-    #     original = [2**32 - 1, 2**63 - 1]  # Maximum values for >I and >Q
-    #     encoded = encode_protocol(original)
-    #     decoded = decode_protocol(encoded)
-    #     self.assertEqual(decoded, original)
-
     def test_deeply_nested_structure(self):
         """Test encoding and decoding of deeply nested lists and tuples."""
         original = [200, 0, [(1, "amy", ["hannah", ["hi", 3030]], False)]]
@@ -337,6 +328,103 @@ class TestPassswordHashing(unittest.TestCase):
         self.assertNotEqual(self.hash_password(wrong_password), hashed_password)
 
 
+class TestMessage(unittest.TestCase):
+
+    def setUp(self):
+        """Set up mock objects for testing"""
+        self.selector = selectors.DefaultSelector()
+        self.sock = MagicMock(spec=socket.socket)
+        self.addr = ("127.0.0.1", 65432)
+        self.request = {
+            "content_encoding": "utf-8",
+            "opcode": 1,
+            "content": {"args": ["test"]}
+        }
+        self.incoming_queue = MagicMock()
+
+        self.client_message = Message(self.selector, self.sock, self.addr, self.request, self.incoming_queue)
+
+    def test_json_encoding_decoding(self):
+        """Test JSON encoding and decoding"""
+        obj = {"key": "value"}
+        encoded = self.client_message._json_encode(obj, "utf-8")
+        decoded = self.client_message._json_decode(encoded, "utf-8")
+        self.assertEqual(obj, decoded)
+
+    def test_package_request(self):
+        """Test packaging a request"""
+        packed_request = self.client_message._package_request(self.request)
+        self.assertIsInstance(packed_request, bytes)
+        self.assertGreater(len(packed_request), 0)
+
+    def test_process_protoheader(self):
+        """Test processing protoheader"""
+        self.client_message._recv_buffer = struct.pack(">H", 1) + struct.pack(">H", 10)
+        self.client_message.process_protoheader()
+        self.assertEqual(self.client_message._header_len, 10)
+
+    def test_process_header(self):
+        """Test processing headers"""
+        header = {
+            "content_encoding": "utf-8",
+            "content_length": 15,
+            "opcode": 1
+        }
+        encoded_header = self.client_message._json_encode(header, "utf-8")
+        self.client_message._recv_buffer = encoded_header
+        self.client_message._header_len = len(encoded_header)
+
+        self.client_message.process_header()
+        self.assertEqual(self.client_message._header["opcode"], 1)
+        self.assertEqual(self.client_message._header["content_length"], 15)
+
+    def test_queue_request(self):
+        """Test queuing a request for sending"""
+        self.client_message.queue_request()
+        self.assertTrue(self.client_message._request_queued)
+        self.assertGreater(len(self.client_message._send_buffer), 0)
+
+    def test_generate_action(self):
+        """Test generating an action"""
+        self.client_message._generate_action(1, 200, ["OK"])
+        self.client_message.incoming_queue.put.assert_called_with({"opcode": 1, "status_code": 200, "data": ["OK"]})
+
+class TestMessageCustom(unittest.TestCase):
+
+    def setUp(self):
+        """Set up mock objects for testing"""
+        self.selector = selectors.DefaultSelector()
+        self.sock = MagicMock(spec=socket.socket)
+        self.addr = ("127.0.0.1", 65432)
+        self.request = {
+            "content_encoding": "utf-8",
+            "opcode": 1,
+            "content": {"args": ["test"]}
+        }
+        self.incoming_queue = MagicMock()
+
+        self.client_message_custom = MessageCustom(self.selector, self.sock, self.addr, self.request, self.incoming_queue)
+
+    def test_package_request_custom(self):
+        """Test packaging a request in custom format"""
+        packed_request = self.client_message_custom._package_request(self.request)
+        self.assertIsInstance(packed_request, bytes)
+        self.assertGreater(len(packed_request), 0)
+
+    def test_process_header_custom(self):
+        """Test processing headers in custom format"""
+        header = encode_protocol(["utf-8", 15, 1])
+        self.client_message_custom._recv_buffer = header
+        self.client_message_custom._header_len = len(header)
+
+        self.client_message_custom.process_header()
+        self.assertEqual(self.client_message_custom._header["opcode"], 1)
+        self.assertEqual(self.client_message_custom._header["content_length"], 15)
+
+    def test_generate_action_custom(self):
+        """Test generating an action in custom format"""
+        self.client_message_custom._generate_action(1, 200, ["OK"])
+        self.client_message_custom.incoming_queue.put.assert_called_with({"opcode": 1, "status_code": 200, "data": ["OK"]})
 
 if __name__ == '__main__':
     unittest.main()
