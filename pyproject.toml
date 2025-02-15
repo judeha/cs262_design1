@@ -3,5 +3,8 @@ name = "cs262_hannah_jude"
 version = "0.1.0"
 description = "COMPSCI 262 Design Exercise 1"
 readme = "README.md"
+python_requires = ">=3.11"
 dependencies = [
+    "pyyaml",
+    "sentence-transformers",
 ]

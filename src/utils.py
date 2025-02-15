@@ -15,13 +15,13 @@ class ResponseCode(Enum):
 
 # Dictionary mapping response codes to human-readable messages"""
 RESPONSE_MESSAGES = {
-    ResponseCode.SUCCESS: "Operation successful",
-    ResponseCode.ACCOUNT_EXISTS: "Account already exists",
-    ResponseCode.INVALID_CREDENTIALS: "Invalid credentials",
-    ResponseCode.BAD_REQUEST: "Bad request",
-    ResponseCode.ACCOUNT_NOT_FOUND: "Account does not exist",
-    ResponseCode.MESSAGE_SEND_FAILURE: "Failed to send message",
-    ResponseCode.DATABASE_ERROR: "Database error",
+    200: "Operation successful",
+    4001: "Account already exists",
+    4002: "Invalid credentials",
+    4041: "Bad request",
+    5001: "Account does not exist",
+    5000: "Failed to send message",
+    4000: "Database error",
 }
 
 class OpCode(Enum):
@@ -38,6 +38,7 @@ class OpCode(Enum):
     DELETE_MSG = 9
     SEND_MSG = 10
     RECEIVE_MSG = 11
+    MATCH = 12
 
 # Dictionary mapping Python types to type codes
 TypeCode = {
@@ -142,7 +143,9 @@ def database_setup(db_path):
     cursor.execute('''CREATE TABLE IF NOT EXISTS accounts (
                    id INTEGER PRIMARY KEY,
                    username TEXT NOT NULL,
-                   password TEXT NOT NULL)''')
+                   password TEXT NOT NULL,
+                   bio TEXT,
+                   bio_embedding BLOB)''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
                    id INTEGER PRIMARY KEY,
