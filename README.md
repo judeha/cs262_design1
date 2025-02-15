@@ -10,12 +10,28 @@ In this design excercise, we built a simple, client-server chat application that
 6. Delete a message or set of messages. Once deleted messages are gone.
 7. Delete an account. You will need to specify the semantics of deleting an account that contains unread messages.
 
-Our application utilizes tkinter for the graphical interface (GUI) and SQLITE for the database. Further, there are two wire protocols implemented, JSON and custom, of which users can specifiy which protocol they want their messages to use in the command line interface. 
-
-### Instructions for Usage
+### Usage Instructions
 1. Download the repository
-2. On Command Line Interface (CLI) run 'python server.py'
-3. Open a new CLI window and run 'python client.py '--host --port --protocol'. We have defualt values for these three parameters. The protocol is set as a default to JSON (0), but you can opt into using the custom protocol by changing the flag to 1.
+2. On Command Line Interface (CLI) run 'python server.py [host] [port] [protocol]', where protocol = 0 refers to the JSON protocol and protocol = 1 refers to the custom protocol. 
+3. Open a new CLI window and run 'python client_gui.py --host --port --protocol'. We have defualt values for these three parameters. The protocol is set as a default to JSON (0), but you can opt into using the custom protocol by changing the flag to 1.
+
+
+### System Design 
+- Backend: Python, SQLITE (database) 
+- Frontend: Tkinter 
+
+**File Structure:**
+- client_gui.py: contains class definition for the GUI and starts the connection to client
+- server.py: starts the connection to server
+- database.py: contains all relevant queries to the database
+- database_setup.py: initializes the database
+- client_handler.py: handles sending requests and processing requests from the server on the client side.
+- server_handler.py: handles processing requests from and sending responses to the client.
+- codes.py: classifications for each request type 
+- utils.py: contains functions for password hashing and using the custom protocol. 
+
+**Protocols**
+There are two different types of protocols available: JSON and a custom binary protocol. Both protocols use the exact same structure for the requests where there is a protoheader, header, request, and response. The protoheader provides metadata about the header, the header provides metadata about the request, the request specifies the type of request (i.e., login, read_message), and the response contains the information the server will send back to the client. The JSON protocol will encode and decode the request in the form of JSON string, whereas our custom binary protocol encodes/decodes bytes. Initially the custom protocol used to decode by identifying pipes ('|'), but we switched over to utilizing a recursive header to avoid casting everything and also be able to parse lists/tuples. It would also place less restrictions on the user in terms of the types of messages they are able to send over the network. To specify which protocol to use for the application, type 0 for JSON and 1 for custom. 
 
 
 To learn more about our design and engineering process, particuarly on the thought process behind efficiency and scalability, click [here](https://docs.google.com/document/d/1VgRHjW2I94al2vKQbMXU5OTpYC9vVg0mS-7m-KCjAWU/edit?usp=sharing).
