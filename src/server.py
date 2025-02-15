@@ -85,7 +85,7 @@ def start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, protocol=DEFAULT_PROTOCOL
         print("\nServer shutting down gracefully...")
     finally:
         sel.close()
-        os.remove(DB_PATH)  # Cleanup database file after shutdown
+        # os.remove(DB_PATH)  # Cleanup database file after shutdown
 
 
 if __name__ == "__main__":

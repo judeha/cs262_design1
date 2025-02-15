@@ -2,21 +2,27 @@
 
 ### Description
 In this design excercise, we built a simple, client-server chat application that allows multiple users to send and receive text messgages from a centralized server. The application allows the following operations: 
-1. Creating an account. The user supplies a unique (login) name. If there is already an account with that name, the user is prompted for the password. If the name is not being used, the user is prompted to supply a password. The password is encrypted before being sent to the server. 
-2. Log in to an account. Using a login name and password, log into an account. An incorrect login or bad user name should display an error. A successful login should display the number of unread messages.
-3. List accounts: Users are able to see a list of current accounts on the server.
-4. Send a message to a recipient. If the recipient is logged in, deliver immediately; if not the message should be stored until the recipient logs in and requests to see the message.
-5. Read messages. If there are undelivered messages, display those messages. The user should be able to specify the number of messages they want delivered at any single time.
-6. Delete a message or set of messages. Once deleted messages are gone.
-7. Delete an account. You will need to specify the semantics of deleting an account that contains unread messages.
+1. Check if an account exists: supply a unique username. If an account exists, you will be taken to login; otherwise you will be taken to account creation
+2. Create an account: supply a unique username, password, and text bio.
+3. Log in to an account
+**All passwords are encrypted! **
+4. List accounts: Users are able to see a list of existing accounts on the server. You can enter a search pattern in the text box below the "List Account" button to search for specific users; leaving the box blank will list all accounts instead.
+5. Send a message to a recipient: If the recipient is logged in, deliver immediately; if not the message will be stored and delivered once the recipient logs in and requests to see it.
+6. Read messages: If another user sends you a message when you are logged in, you will see it immediately. If you want to see messages sent while you were logged out, specify a number of messages to read in the text box below the "See new messages" button
+7. Read archived messages: You can see previously read messages by specifying a number in the text box below the "See older messages" button.
+8. Delete a message or set of messages: When on the GUI, to delete messages, type in the list of message ids you want to delete in the text box below the "Delete messages" button. Ids must be separated by commas. Ex: <5,6>. You can only delete messages you have received.
+9. Delete an account
+10. EXTRA FEATURE: "Find my nemesis" -- in honor of all the single people on Valentine's day, find the user you are most incompatible with based on your bios. It'll be hate at first text <3
 
 ### Usage Instructions
 1. Download the repository
-2. On Command Line Interface (CLI) run 'python server.py --host --port --protocol', where protocol = 0 refers to the JSON protocol and protocol = 1 refers to the custom protocol. 
-3. Open a new CLI window and run 'python client_gui.py --host --port --protocol'. We have defualt values for these three parameters. The protocol is set as a default to JSON (0), but you can opt into using the custom protocol by changing the flag to 1.
-
-When on the GUI, to delete messages, type in the list of message ids separated by commas. Ex: <5,6>. 
-**All passwords are encrypted! **
+2. Setup: we use [uv] (https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) manager. To set up your environment, run:
+```
+uv sync
+source .venv/bin/activate
+```
+3. On Command Line Interface (CLI) run ```python server.py``` with optional args ```--host <HOST> --port <PORT> --protocol <PROTOCOL>```. Default settings are 127.0.0.1, 65432, and 0. The 0 flag indicates a JSON protocol, and the 1 flag indicates a custom protocol. To host on multiple machines, get your IP address by running ```ipconfig getifaddr en0```.
+4. Open a new CLI window and run ```python client_gui.py --host --port --protocol```. 
 
 
 ### System Design 
@@ -36,10 +42,17 @@ When on the GUI, to delete messages, type in the list of message ids separated b
 
 **Protocols** 
   
-There are two different types of protocols available: JSON and a custom binary protocol. Both protocols use the exact same structure for the requests where there is a protoheader, header, request, and response. The protoheader provides metadata about the header, the header provides metadata about the request, the request specifies the type of request (i.e., login, read_message), and the response contains the information the server will send back to the client. The JSON protocol will encode and decode the request in the form of JSON string, whereas our custom binary protocol encodes/decodes bytes. Initially the custom protocol used to decode by identifying pipes ('|'), but we switched over to utilizing a recursive header to avoid casting everything and also be able to parse lists/tuples. It would also place less restrictions on the user in terms of the types of messages they are able to send over the network. To specify which protocol to use for the application, type 0 for JSON and 1 for custom. 
+There are two different types of protocols available: JSON and a custom wire protocol. Both protocols utilize a message structure consisting of a protoheader, header, and content:
+- Protoheader: a fixed 4-byte header that contains information about the protocol version + header length
+- Header: a variable-length header that contains metadata about the content of the message (encoding, length, and requested operation)
+- Content: the client request/server response that contains actionable information and data 
+The JSON protocol serializes/deserializes objects via JSON string, whereas our custom protocol encodes/decodes bytes. Initially, our wire protocol relied on piping (delimiting arguments with pipes '|'), but we have since switched to a recursive encoding/decoding protocol that prefixes all arguments with a "miniheader" containing their type and length. This allows us to reduce fragile casting, parse nested structures like lists or tuples, and place less restrictions on the types of messages a user is able to send over the network.
 
+Example of recursive encoding:
+- Raw data: [200, "hello", [8, False, 9]]
+- Encoded data: <list,3><int,3>200<str,5>hello<list,3><int,1>8<bool,1>False<int,1>9
 
-To learn more about our design and engineering process, particuarly on the thought process behind efficiency and scalability, click [here](https://docs.google.com/document/d/1VgRHjW2I94al2vKQbMXU5OTpYC9vVg0mS-7m-KCjAWU/edit?usp=sharing).
+To see our engineering notebook, click [here](https://docs.google.com/document/d/1VgRHjW2I94al2vKQbMXU5OTpYC9vVg0mS-7m-KCjAWU/edit?usp=sharing).
 
 Any and all feedback is appreciated! 
 
