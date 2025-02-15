@@ -485,7 +485,7 @@ class MessageCustom:
                 self.active_clients[args[0]] = self
         elif opcode == OpCode.LIST_ACCOUNTS.value:
             if len(args) > 0:
-                result = self.db.list_accounts_match(args[0])
+                result = self.db.list_accounts(pattern="".join(args))
             else:
                 result = self.db.list_accounts()
         elif opcode == OpCode.DELETE_ACCOUNT.value:

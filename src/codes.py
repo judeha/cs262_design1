@@ -20,11 +20,6 @@ RESPONSE_MESSAGES = {
     ResponseCode.DATABASE_ERROR: "Database error",
 }
 
-class Schema(Enum):
-    ACCOUNTS = 2,
-    CLIENT_MSG = 5, # id auto-generated
-    SERVER_MSG = 6, # tuple(id, sender_username, receiver_username, msg_content, timestamp, delivered/undelivered bool)
-
 class OpCode(Enum):
     STARTING = 0
     ACCOUNT_EXISTS = 1

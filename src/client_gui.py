@@ -461,6 +461,7 @@ class ChatGUI:
         receiver.delete(0, tk.END)
 
     def _on_list_accounts(self, list_acc_entry): # TODO: fix
+        print("HEY,", list_acc_entry.get())
         if list_acc_entry.get() == "":
             self.send_message(OpCode.LIST_ACCOUNTS.value, [])
         else:
