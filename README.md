@@ -16,6 +16,8 @@ In this design excercise, we built a simple, client-server chat application that
 3. Open a new CLI window and run 'python client_gui.py --host --port --protocol'. We have defualt values for these three parameters. The protocol is set as a default to JSON (0), but you can opt into using the custom protocol by changing the flag to 1.
 
 When on the GUI, to delete messages, type in the list of message ids separated by commas. Ex: <5,6>. 
+**All passwords are encrypted! **
+
 
 ### System Design 
 **Stack**
