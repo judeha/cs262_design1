@@ -69,13 +69,40 @@ class TestDatabaseHandler(unittest.TestCase):
         response = self.db.delete_account("nonexistent", "password123")
         self.assertEqual(response["status_code"], ResponseCode.ACCOUNT_NOT_FOUND.value)
 
-    def test_list_accounts(self):
+    def test_list_all_accounts(self):
         """Test retrieving all accounts."""
-        self.db.create_account("user1", "pass1")
-        self.db.create_account("user2", "pass2")
+        self.db.create_account("amy", "pass1")
+        self.db.create_account("hannah", "pass2")
+        self.db.conn.commit()
+
         response = self.db.list_accounts()
         self.assertEqual(response["status_code"], ResponseCode.SUCCESS.value)
         self.assertEqual(len(response["data"]), 2)
+
+    def test_list_accounts_with_pattern(self):
+        """Test listing accounts with a pattern."""
+        self.db.create_account("amy", "pass1")
+        self.db.create_account("hannah", "pass2")
+        self.db.create_account("alex", "pass2")
+        self.db.create_account("amanda", "pass2")
+        self.db.conn.commit()
+    
+        response = self.db.list_accounts(pattern="am")
+        self.assertEqual(response["status_code"], ResponseCode.SUCCESS.value)
+        usernames = [username for _, username in response["data"]]
+        self.assertCountEqual(usernames, ["amy", "amanda"])  # Expecting only "amy" and "amanda"
+
+    def test_list_accounts_with_no_match(self):
+        """Test listing accounts with a pattern that has no matches."""
+        response = self.db.list_accounts("xyz")
+        self.assertEqual(response["status_code"], ResponseCode.SUCCESS.value)
+        self.assertEqual(response["data"], [])  # Expecting an empty list
+
+    def test_list_accounts_db_error(self):
+        """Test handling of a database error."""
+        self.db.cursor.execute("DROP TABLE accounts")  # Cause a database error
+        response = self.db.list_accounts()
+        self.assertEqual(response["status_code"], ResponseCode.DATABASE_ERROR.value)
 
     def test_insert_message_success(self):
         """Test successful message insertion."""

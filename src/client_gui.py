@@ -2,6 +2,7 @@
 import argparse
 import socket
 import yaml
+import copy
 import selectors
 import threading
 import os
@@ -10,7 +11,7 @@ import time
 from tkinter import scrolledtext
 import queue
 import hashlib
-from codes import OpCode, ResponseCode
+from codes import OpCode, ResponseCode, RESPONSE_MESSAGES
 from libclient import Message, MessageCustom
 import random
 
@@ -27,18 +28,6 @@ ui_dimensions = config_dict['ui_dimensions']
 content_encoding = config_dict['encoding']
 emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
 max_view = config_dict["max_view"]
-
-MSG_LEN = 6
-ACC_LEN = 2
-
-# TODO: logging
-# TODO: error enforcement
-# TODO: matching
-# TODO: custom protocol
-# TODO: password security
-# TODO: delete messages, list account string matching
-
-# Done: delete account, delete messages
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages the selector event while loop
@@ -66,7 +55,6 @@ class SelectorThread(threading.Thread):
             for key, mask in events:
                 message_obj = key.data  # This should be a `Message` instance
                 try:
-                    print("MASK", mask)
                     message_obj.process_events(mask)
                 except Exception as e:
                     print(f"[SelectorThread] Error in process_events: {e}")
@@ -92,14 +80,18 @@ class ChatGUI:
         self.root = root
         self.message_obj = message_obj
         self.incoming_queue = incoming_queue
-        self.username = "Guest"
-        #TODO: Make sure that username updates on the UI for homepage
 
         # Set up the main window
         self.root.title("MyChat")
         self.root.geometry(ui_dimensions) 
         self.container = tk.Frame(root, bg=BG_COLOR)
         self.container.pack(expand=True, fill=tk.BOTH)
+
+        # Initialize chat display variables
+        self.messages = []
+        self.count = 0
+        self.accounts = []
+        self.username = ""
 
         # Set up all wireframes
         self.frames = {}
@@ -109,11 +101,7 @@ class ChatGUI:
         # Periodically poll the incoming queue
         self.poll_incoming()
 
-        # Initialize chat display
-        self.messages = [] # TODO: fragile
-        self.count = 0
-        self.accounts = []
-
+        # Define which wire protocol to use
         self.protocol = protocol
 
     def send_message(self, opcode, args):
@@ -150,44 +138,42 @@ class ChatGUI:
                 data = response_str["data"]
 
                 # Handle the response based on the opcode
+                # Starting page
                 if opcode == OpCode.STARTING.value:
-                    self.show_frame("main") # TODO: fragile, starting condition
+                    self.show_frame("main")
                 elif opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
-                    # Stay in the same frame if the request failed
-                    self.display_error("Invalid request or incorrect credentials.") # TODO: shows on wrong page
+                    # Stay in the same frame if the request failed and display error message
+                    self.display_error(RESPONSE_MESSAGES[status_code])
                 else:
+                    # If new user, create account
                     if opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_NOT_FOUND.value:
                         self.show_frame("create_account")
+                    # If existing user, login
                     elif opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_EXISTS.value:
                         self.show_frame("login")
+                    # If account creation successful, login
                     elif opcode == OpCode.CREATE_ACCOUNT.value:
                         self.show_frame("login")
-                    elif opcode == OpCode.LOGIN_ACCOUNT.value:
+                    # If operation requires homepage to be fetched, show homepage
+                    elif opcode in [OpCode.LOGIN_ACCOUNT.value, OpCode.HOMEPAGE.value, OpCode.READ_MSG_UNDELIVERED.value, OpCode.DELETE_MSG.value]:
                         self.count = data.pop(0)
                         self.messages = data
                         self.show_frame("homepage")
+                    # If listing accounts, show accounts
                     elif opcode == OpCode.LIST_ACCOUNTS.value:
                         self.accounts = data
                         self.show_frame("list_accounts")
+                    # If account deletion successful, show main
                     elif opcode == OpCode.DELETE_ACCOUNT.value:
-                        self.show_frame("main") # TODO: add a success message
-                    elif opcode == OpCode.HOMEPAGE.value:
-                        self.count = data.pop(0)
-                        self.messages = data
-                        self.show_frame("homepage")
-                    elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
-                        self.count = data.pop(0)
-                        self.messages = data
-                        self.show_frame("homepage")
+                        self.show_frame("main")
+                    # If fetching archived messages, extend homepage length
                     elif opcode == OpCode.READ_MSG_DELIVERED.value:
                         self.messages = data
                         self.show_frame("homepage")
-                    elif opcode == OpCode.DELETE_MSG.value:
-                        self.count = data.pop(0)
-                        self.messages = data
-                        self.show_frame("homepage")
+                    # If sending message, stay on homepage
                     elif opcode == OpCode.SEND_MSG.value:
                         self.show_frame("homepage")
+                    # If receiving message, update messages and stay on homepage
                     elif opcode == OpCode.RECEIVE_MSG.value:
                         self.messages += data
                         if len(self.messages) > max_view:
@@ -197,7 +183,6 @@ class ChatGUI:
                 break
             else:
                 pass
-                # self._append_chat(response_str)
 
         # Schedule next poll
         self.root.after(2, self.poll_incoming) # TODO: put in config
@@ -209,7 +194,7 @@ class ChatGUI:
         # Messages
         tk.Label(frame, text="Welcome to MyChat! Check if you have an account.").pack(pady=10)
         # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
+        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
         self.error_label.pack(pady=5)  # Show at the top
 
         # Username entry field
@@ -229,7 +214,7 @@ class ChatGUI:
         # Messages
         tk.Label(frame, text="Please create an account to continue.").pack(pady=10) # TODO: use config username/password enforcements
         # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
+        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
         self.error_label.pack(pady=5)  # Show at the top
 
         # Username, password entry fields
@@ -253,7 +238,7 @@ class ChatGUI:
         tk.Label(frame, text="Enter your username and password to login").pack(pady=10)
 
         # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
+        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
         self.error_label.pack(pady=5,)  # Show at the top
 
         # Username, password entry fields
@@ -270,82 +255,111 @@ class ChatGUI:
         
         return frame
 
+    def update_homepage_title(self):
+        """Dynamically update the homepage title with the logged-in username."""
+        if hasattr(self, "homepage_title_label"):
+            text = f"Welcome, {self.username}!" if self.username else "MyChat"
+            self.homepage_title_label.config(text=text)
+
     def setup_homepage_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
-        # Messages
-        if hasattr(self, "username"):
-            text = f"Welcome, {self.username}!"
-        else:
-            text = "MyChat"
+        # ✅ Welcome message
+        self.homepage_title_label = tk.Label(frame, text="MyChat", font=("Arial", 14, "bold"), fg="white", bg=BG_COLOR)
+        self.homepage_title_label.grid(row=0, column=0, columnspan=3, pady=10, sticky="w")
 
-        tk.Label(frame, text=text).pack(pady=5)
-        # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="black", bg=BG_COLOR)
-        self.error_label.pack(pady=5)  # Show at the top
+        # ✅ Error message (initially empty)
+        self.error_label = tk.Label(frame, text="", fg="red", bg=BG_COLOR)
+        self.error_label.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
-        # Create a frame for chat display and accounts list (side by side)
+        # ✅ Chat Display
         chat_frame = tk.Frame(frame)
-        chat_frame.pack(fill='both', expand=False)
+        chat_frame.grid(row=2, column=0, columnspan=3, pady=10, sticky="nsew")
 
-        # Scrollbar for chat display
         scrollbar = tk.Scrollbar(chat_frame)
         scrollbar.pack(side='right', fill='y')
-        # Chatbox (read-only text widget)
+
         self.chat_display = tk.Text(chat_frame, width=50, height=20, 
                                     state='disabled', wrap='word', 
                                     yscrollcommand=scrollbar.set)
         self.chat_display.pack(side='left', padx=(0, 5), fill='both', expand=True)
+
         scrollbar.config(command=self.chat_display.yview)  # Link scrollbar
 
-        # Frame for message input and buttons (placed below chat_frame)
-        input_frame = tk.Frame(frame)
-        input_frame.pack(fill='x', pady=(10, 0))
+        # ✅ Right-side controls (buttons + entry fields)
+        control_frame = tk.Frame(frame, bg=BG_COLOR)
+        control_frame.grid(row=2, column=3, padx=20, sticky="ns")
 
-        # Receiver, message entry fields
+        def add_placeholder(entry_widget, placeholder_text):
+            """ Adds a placeholder to an Entry widget. """
+            entry_widget.insert(0, placeholder_text)
+            entry_widget.config(fg="gray")  # Makes the text gray for placeholder effect
+
+            def on_focus_in(event):
+                if entry_widget.get() == placeholder_text:
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.config(fg="black")  # Set text color back to black
+
+            def on_focus_out(event):
+                if not entry_widget.get():
+                    entry_widget.insert(0, placeholder_text)
+                    entry_widget.config(fg="gray")  # Restore placeholder color
+
+            entry_widget.bind("<FocusIn>", on_focus_in)
+            entry_widget.bind("<FocusOut>", on_focus_out)
+
+        # Delete Account
+        delete_acc_btn = tk.Button(control_frame, text='Delete Account', 
+                                command=lambda: self._on_delete_account(self.username, self.password))
+        delete_acc_btn.grid(row=1, column=0, pady=5, sticky="ew")
+
+        # Delete Messages
+        delete_msgs_entry = tk.Entry(control_frame)
+        delete_msgs_entry.grid(row=4, column=0, pady=2, sticky="ew")
+        delete_btn = tk.Button(control_frame, text="Delete Messages", 
+                            command=lambda: self._on_delete_messages(self.username, delete_msgs_entry))
+        delete_btn.grid(row=3, column=0, pady=5, sticky="ew")
+
+        # List Accounts
+        list_acc_entry = tk.Entry(control_frame)
+        list_acc_entry.grid(row=7, column=0, pady=2, sticky="ew")
+        list_acc_btn = tk.Button(control_frame, text='List Account', 
+                                command=lambda: self._on_list_accounts(list_acc_entry))
+        list_acc_btn.grid(row=6, column=0, pady=5, sticky="ew")
+
+        # Fetch Read Messages
+        num_read_msgs_entry = tk.Entry(control_frame)
+        num_read_msgs_entry.grid(row=10, column=0, pady=2, sticky="ew")
+        fetch_read_btn = tk.Button(control_frame, text='See older messages', 
+                                bg=BTN_BG_COLOR,
+                                command=lambda: self._on_fetch_read_message(num_read_msgs_entry))
+        fetch_read_btn.grid(row=9, column=0, pady=5, sticky="ew")
+
+        # Fetch Unread Messages
+        num_unread_msgs_entry = tk.Entry(control_frame)
+        num_unread_msgs_entry.grid(row=13, column=0, pady=2, sticky="ew")
+        fetch_unread_btn = tk.Button(control_frame, text='See new messages', 
+                                    command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
+        fetch_unread_btn.grid(row=12, column=0, pady=5, sticky="ew")
+
+        # ✅ Bottom section: Message Entry & Send Button
+        input_frame = tk.Frame(frame, bg=BG_COLOR)
+        input_frame.grid(row=3, column=0, columnspan=3, pady=15, sticky="nsew")
+
         receiver_entry = tk.Entry(input_frame)
-        receiver_entry.pack(side='left', padx=10, fill="x", expand=False)
+        receiver_entry.grid(row=1, column=0, padx=10, sticky="ew")
+        add_placeholder(receiver_entry, "Recipient username")
+
         message_entry = tk.Entry(input_frame)
-        message_entry.pack(side='left', padx=20, fill="x", expand=True)
-        receiver_label = tk.Label(frame, text="recipient", fg=BG_COLOR, highlightbackground=BG_COLOR)
-        receiver_label.pack(side='left', padx=50)
-        message_label = tk.Label(frame, text="your message", fg=BG_COLOR, highlightbackground=BG_COLOR)
-        message_label.pack(side='left', padx=100)
+        message_entry.grid(row=1, column=1, padx=10, sticky="ew")
+        add_placeholder(message_entry, "Type your message here")
 
-        # Send button
-        send_btn = tk.Button(input_frame, text='Send', command=lambda: self._on_send_message(receiver_entry, message_entry))
-        send_btn.pack(side='left', padx=5)
-
-        # Delete Account button
-        delete_acc_btn = tk.Button(input_frame, text='Delete Account', command=lambda: self._on_delete_account(self.username, self.password))
-        delete_acc_btn.pack(side='top', pady=5)
-
-        # Add "Delete Messages" button
-        delete_msgs_entry = tk.Entry(input_frame)
-        delete_msgs_entry.pack(side='right')
-        delete_btn = tk.Button(input_frame, text="Delete Messages", command=lambda: self._on_delete_messages(self.username, delete_msgs_entry))
-        delete_btn.pack(side='top', pady=5)
-
-        # List Account button
-        list_acc_entry = tk.Entry(input_frame)
-        list_acc_entry.pack(side='right')
-        list_acc_btn = tk.Button(input_frame, text='List Account', command=lambda: self._on_list_accounts(list_acc_entry)) # TODO change to text field
-        list_acc_btn.pack(side='top', pady=5)
-
-        # Fetch last X delivered messages button
-        num_read_msgs_entry = tk.Entry(input_frame)
-        num_read_msgs_entry.pack(side='right')
-        fetch_read_btn = tk.Button(input_frame, text='See older messages', command=lambda: self._on_fetch_read_message( num_read_msgs_entry))
-        fetch_read_btn.pack(side='top', pady=5)
-        
-        # Fetch last Y undelivered messages button
-        num_unread_msgs_entry = tk.Entry(input_frame)
-        num_unread_msgs_entry.pack(side='right')
-        fetch_unread_btn = tk.Button(input_frame, text='See new messages', command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
-        fetch_unread_btn.pack(side='top', pady=5)
+        send_btn = tk.Button(input_frame, text='Send', 
+                            command=lambda: self._on_send_message(receiver_entry, message_entry))
+        send_btn.grid(row=1, column=2, padx=5, sticky="ew")
 
         return frame
-
+    
     def setup_list_accounts_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
         tk.Label(frame, text="List of Accounts").pack(pady=5)
@@ -386,6 +400,7 @@ class ChatGUI:
 
         # If switching to homepage, refresh messages
         if frame_name == "homepage":
+            self.update_homepage_title()
             self.display_messages()
         
         if frame_name == "list_accounts":
@@ -440,8 +455,8 @@ class ChatGUI:
         return hashlib.sha256(password.encode()).hexdigest()
 
     def _on_login_account(self, username, password):
-        # TODO: sketch
-        self.username = username.get()
+        self.username = copy.deepcopy(username.get())
+        print("USERNAME:", self.username)
         self.password = password.get()
         self.send_message(OpCode.LOGIN_ACCOUNT.value, 
                           [username.get(), self._hash_password(password.get())])
@@ -461,6 +476,7 @@ class ChatGUI:
         receiver.delete(0, tk.END)
 
     def _on_list_accounts(self, list_acc_entry): # TODO: fix
+        print("HEY,", list_acc_entry.get())
         if list_acc_entry.get() == "":
             self.send_message(OpCode.LIST_ACCOUNTS.value, [])
         else:
