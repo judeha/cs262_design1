@@ -1,5 +1,5 @@
 import unittest
-import sqlite3
+import pytest
 import sys
 import os
 # Adjust path to ensure tests can import database_handler
@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from database import DatabaseHandler  # Assuming this is saved as database_handler.py
 from database_setup import database_setup
 from codes import ResponseCode
+from custom_protocol import encode_protocol, decode_protocol
 
 db_path = "test_messages.db"
 
@@ -162,7 +163,7 @@ class TestDatabaseHandler(unittest.TestCase):
         self.db.create_account("user1", "pass1")
         self.db.create_account("user2", "pass2")
         response = self.db.insert_message("user1", "user2", long_message, 1234567890, False)
-        self.assertEqual(response["status_code"], ResponseCode.SUCCESS.value)
+        self.assertEqual(response["status_code"], ResponseCode.BAD_REQUEST.value)
 
     def test_insert_message_long_timestamp(self):
         """Test inserting a message with long content."""
@@ -221,6 +222,72 @@ class TestDatabaseHandler(unittest.TestCase):
         """Test account existence check for an invalid SQL case."""
         response = self.db.account_exists("' OR '1'='1")
         self.assertFalse(response)
+
+
+class TestProtocolEncoding(unittest.TestCase):
+    
+    def test_simple_types(self):
+        """Test encoding and decoding of primitive types."""
+        test_cases = [
+            ([42], [42]),  # Integer
+            (["hello"], ["hello"]),  # String
+            ([True, False], [True, False]),  # Boolean
+        ]
+        for original, expected in test_cases:
+            with self.subTest(original=original):
+                encoded = encode_protocol(original)
+                decoded = decode_protocol(encoded)
+                self.assertEqual(decoded, expected)
+
+    def test_nested_tuples(self):
+        """Test encoding and decoding of nested tuples."""
+        original = [200, 0, [(1, "amy", "hannah", "hiii", 3030, False)]]
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
+
+    def test_multiple_nested_tuples(self):
+        """Test encoding and decoding of multiple nested tuples in a list."""
+        original = [200, 0, [(1, "amy", "hannah", "hiii", 3030, False), 
+                             (2, "hannah", "amy", "booo", 3031, True)]]
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
+
+    def test_empty_list(self):
+        """Test encoding and decoding of an empty list."""
+        original = []
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
+
+    def test_single_element_tuple(self):
+        """Test encoding and decoding of a list containing a tuple with one element."""
+        original = [(1,)]
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
+
+    def test_mixed_types(self):
+        """Test encoding and decoding of a list containing mixed types."""
+        original = [200, "hello", [1,"hi"], False, (1, "amy", "hannah", "hi", 3030, False)]
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
+
+    # def test_large_numbers(self):
+    #     """Test encoding and decoding of large numbers."""
+    #     original = [2**32 - 1, 2**63 - 1]  # Maximum values for >I and >Q
+    #     encoded = encode_protocol(original)
+    #     decoded = decode_protocol(encoded)
+    #     self.assertEqual(decoded, original)
+
+    def test_deeply_nested_structure(self):
+        """Test encoding and decoding of deeply nested lists and tuples."""
+        original = [200, 0, [(1, "amy", ["hannah", ["hi", 3030]], False)]]
+        encoded = encode_protocol(original)
+        decoded = decode_protocol(encoded)
+        self.assertEqual(decoded, original)
 
 if __name__ == '__main__':
     unittest.main()

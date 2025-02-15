@@ -66,7 +66,7 @@ class DatabaseHandler():
             if not self.account_exists(username):
                 return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
             # Delete account
-            self.cursor.execute("DELETE FROM accounts WHERE username=? AND password=?", (username, password))
+            self.cursor.execute("DELETE FROM accounts WHERE username=?", (username,))
             self.conn.commit() # NOTE: unsent messages will be stored in undelivered
             return {"status_code": ResponseCode.SUCCESS.value}
         except sqlite3.Error as e:

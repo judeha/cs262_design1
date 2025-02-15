@@ -28,6 +28,9 @@ content_encoding = config_dict['encoding']
 emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
 max_view = config_dict["max_view"]
 
+MSG_LEN = 6
+ACC_LEN = 2
+
 # TODO: logging
 # TODO: error enforcement
 # TODO: matching
@@ -63,6 +66,7 @@ class SelectorThread(threading.Thread):
             for key, mask in events:
                 message_obj = key.data  # This should be a `Message` instance
                 try:
+                    print("MASK", mask)
                     message_obj.process_events(mask)
                 except Exception as e:
                     print(f"[SelectorThread] Error in process_events: {e}")
@@ -79,7 +83,7 @@ class ChatGUI:
     """
     A simple Tkinter GUI that displays incoming messages and sends new requests.
     """
-    def __init__(self, root, message_obj, incoming_queue):
+    def __init__(self, root, message_obj, incoming_queue,protocol=0):
         """
         :param root: Tk root
         :param message_obj: The libclient.Message instance handling socket I/O
@@ -109,6 +113,8 @@ class ChatGUI:
         self.messages = [] # TODO: fragile
         self.count = 0
         self.accounts = []
+
+        self.protocol = protocol
 
     def send_message(self, opcode, args):
         """
@@ -167,7 +173,7 @@ class ChatGUI:
                         self.show_frame("main") # TODO: add a success message
                     elif opcode == OpCode.HOMEPAGE.value:
                         self.count = data.pop(0)
-                        self.messages = data # TODO: refactor for redundancy
+                        self.messages = data
                         self.show_frame("homepage")
                     elif opcode == OpCode.READ_MSG_UNDELIVERED.value:
                         self.count = data.pop(0)
@@ -263,7 +269,6 @@ class ChatGUI:
         login_btn.pack(pady=10)
         
         return frame
-    
 
     def setup_homepage_frame(self):
         frame = tk.Frame(self.container, bg=BG_COLOR)
@@ -299,12 +304,8 @@ class ChatGUI:
 
         # Receiver, message entry fields
         receiver_entry = tk.Entry(input_frame)
-        # self._set_placeholder(receiver_entry, "Receiver:")
-
         receiver_entry.pack(side='left', padx=10, fill="x", expand=False)
         message_entry = tk.Entry(input_frame)
-        # self._set_placeholder(message_entry, "Type your message...")
-
         message_entry.pack(side='left', padx=20, fill="x", expand=True)
         receiver_label = tk.Label(frame, text="recipient", fg=BG_COLOR, highlightbackground=BG_COLOR)
         receiver_label.pack(side='left', padx=50)
@@ -377,7 +378,6 @@ class ChatGUI:
         for frame in self.frames.values():
             # Place each frame in the same row/column so they overlap
             frame.grid(row=0, column=0, sticky="nsew")
-
 
     def show_frame(self, frame_name):
         """Brings the specified frame to the front."""
@@ -494,7 +494,7 @@ def start_connection(host, port, incoming_queue, protocol=0):
     # Build initial request
     initial_request = {
         "content_encoding": content_encoding,
-        "opcode": -1,
+        "opcode": OpCode.STARTING.value,
         "content": {"args": []},  # TODO: fragile
     }
 
@@ -503,10 +503,11 @@ def start_connection(host, port, incoming_queue, protocol=0):
     if not protocol:
         msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
     else:
-        msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
+        msg_obj = MessageCustom(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
 
     # Register the socket with the selector
     sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
+    print("DID THIS")
 
     return sel, msg_obj
 
@@ -530,7 +531,7 @@ def main(args):
 
     # 4) Set up Tkinter in the main thread
     root = tk.Tk()
-    app = ChatGUI(root, message_obj, incoming_queue)
+    app = ChatGUI(root, message_obj, incoming_queue, protocol=protocol)
 
     # On close, signal the selector thread to stop, close the socket, etc.
     def on_close():

@@ -8,7 +8,7 @@ class ResponseCode(Enum):
     MESSAGE_SEND_FAILURE = 5001
     DATABASE_ERROR = 5000
     BAD_REQUEST = 4000
-    STARTING = -1 # TODO: fragile
+    STARTING = 0 # TODO: fragile
 
 RESPONSE_MESSAGES = {
     ResponseCode.SUCCESS: "Operation successful",
@@ -21,35 +21,34 @@ RESPONSE_MESSAGES = {
 }
 
 class Schema(Enum):
-    ACCOUNTS = 3,
+    ACCOUNTS = 2,
     CLIENT_MSG = 5, # id auto-generated
     SERVER_MSG = 6, # tuple(id, sender_username, receiver_username, msg_content, timestamp, delivered/undelivered bool)
 
-
 class OpCode(Enum):
-    STARTING = -1
-    ACCOUNT_EXISTS = 0
-    CREATE_ACCOUNT = 1
-    LOGIN_ACCOUNT = 2
-    LIST_ACCOUNTS = 3
-    DELETE_ACCOUNT = 4
-    HOMEPAGE = 5
-    READ_MSG_UNDELIVERED = 6
-    READ_MSG_DELIVERED = 7
-    DELETE_MSG = 8
-    SEND_MSG = 9
-    RECEIVE_MSG = 10
+    STARTING = 0
+    ACCOUNT_EXISTS = 1
+    CREATE_ACCOUNT = 2
+    LOGIN_ACCOUNT = 3
+    LIST_ACCOUNTS = 4
+    DELETE_ACCOUNT = 5
+    HOMEPAGE = 6
+    READ_MSG_UNDELIVERED = 7
+    READ_MSG_DELIVERED = 8
+    DELETE_MSG = 9
+    SEND_MSG = 10
+    RECEIVE_MSG = 11
 
 TypeCode = {
     'int': 0,
     'str': 1,
     'bool': 2,
-    'float': 3
+    'list': 3,
+    'tuple': 4
 }
 
 TypeCode2 = {
     0: '>I',
     1: '>s',
     2: '?',
-    3: '>f'
 }

@@ -33,7 +33,8 @@ def accept_wrapper(sock, protocol):
     if not protocol:
         message = libserver.Message(sel, conn, addr, db_path=db_path, active_clients=active_clients)
     else:
-        message = libserver.Message(sel, conn, addr, db_path=db_path, active_clients=active_clients)
+        print("HERE")
+        message = libserver.MessageCustom(sel, conn, addr, db_path=db_path, active_clients=active_clients)
     sel.register(conn, selectors.EVENT_READ, data=message)
 
 # Main loop
