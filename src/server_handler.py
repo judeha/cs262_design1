@@ -287,7 +287,7 @@ class Message:
 
     def close(self):
         """Unregister and close the socket."""
-        logging("Closing connection to {self.addr}")
+        # logging("Closing connection to {self.addr}")
         try:
             self.selector.unregister(self.sock)
         except Exception as e:
