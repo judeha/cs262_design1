@@ -15,6 +15,7 @@ In this design excercise, we built a simple, client-server chat application that
 2. On Command Line Interface (CLI) run 'python server.py [host] [port] [protocol]', where protocol = 0 refers to the JSON protocol and protocol = 1 refers to the custom protocol. 
 3. Open a new CLI window and run 'python client_gui.py --host --port --protocol'. We have defualt values for these three parameters. The protocol is set as a default to JSON (0), but you can opt into using the custom protocol by changing the flag to 1.
 
+When on the GUI, to delete messages, type in the list of message ids separated by commas. Ex: <5,6>. 
 
 ### System Design 
 **Stack**
