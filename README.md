@@ -17,6 +17,7 @@ In this design excercise, we built a simple, client-server chat application that
 
 
 ### System Design 
+**Stack**
 - Backend: Python, SQLITE (database) 
 - Frontend: Tkinter 
 
@@ -30,7 +31,8 @@ In this design excercise, we built a simple, client-server chat application that
 - codes.py: classifications for each request type 
 - utils.py: contains functions for password hashing and using the custom protocol. 
 
-**Protocols**
+**Protocols** 
+  
 There are two different types of protocols available: JSON and a custom binary protocol. Both protocols use the exact same structure for the requests where there is a protoheader, header, request, and response. The protoheader provides metadata about the header, the header provides metadata about the request, the request specifies the type of request (i.e., login, read_message), and the response contains the information the server will send back to the client. The JSON protocol will encode and decode the request in the form of JSON string, whereas our custom binary protocol encodes/decodes bytes. Initially the custom protocol used to decode by identifying pipes ('|'), but we switched over to utilizing a recursive header to avoid casting everything and also be able to parse lists/tuples. It would also place less restrictions on the user in terms of the types of messages they are able to send over the network. To specify which protocol to use for the application, type 0 for JSON and 1 for custom. 
 
 
