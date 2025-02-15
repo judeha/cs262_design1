@@ -88,8 +88,9 @@ class DatabaseHandler():
     def list_accounts(self, pattern:str=None) -> dict[int, list[tuple]]:
         """ Return a list of all accounts """
         try:
+            print("PATTERN", pattern)
             # Fetch all accounts
-            if pattern:
+            if pattern is not None:
                 self.cursor.execute("SELECT id, username FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
             else:
                 self.cursor.execute("SELECT id, username FROM accounts")

@@ -304,7 +304,6 @@ class MessageCustom:
 
         # Encode header
         header = [encoding,len(content_bytes),req["opcode"]]
-        print("header", header)
         header_bytes = encode_protocol(header)  # Serialize header
 
         # Encode protoheader and package message
