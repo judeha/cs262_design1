@@ -5,14 +5,12 @@ import yaml
 import copy
 import selectors
 import threading
-import os
 import tkinter as tk
 import time
-from tkinter import scrolledtext
 import queue
 import hashlib
-from codes import OpCode, ResponseCode, RESPONSE_MESSAGES
-from libclient import Message, MessageCustom
+from utils import OpCode, ResponseCode, RESPONSE_MESSAGES
+from client_handler import Message, MessageCustom
 import random
 
 # Read config file
@@ -74,7 +72,7 @@ class ChatGUI:
     def __init__(self, root, message_obj, incoming_queue,protocol=0):
         """
         :param root: Tk root
-        :param message_obj: The libclient.Message instance handling socket I/O
+        :param message_obj: The client_handler.Message instance handling socket I/O
         :param incoming_queue: queue.Queue for receiving updates from the server
         """
         self.root = root
@@ -417,6 +415,8 @@ class ChatGUI:
         self.chat_display.delete(1.0, tk.END)  # Clear old messages
 
         self.chat_display.insert(tk.END, f"Unread messages: {self.count}\n\n")
+
+        self.messages.sort(key=lambda x: x[4], reverse=False)
         
         # Display in reverse order so newest messages are at the bottom
         for msg in self.messages:
@@ -494,7 +494,7 @@ class ChatGUI:
 def start_connection(host, port, incoming_queue, protocol=0):
     """
     Creates a non-blocking socket, registers it with a selector using
-    our libclient.Message class, and returns (selector, message_obj).
+    our client_handler.Message class, and returns (selector, message_obj).
     """
     sel = selectors.DefaultSelector()
 
@@ -516,6 +516,7 @@ def start_connection(host, port, incoming_queue, protocol=0):
 
     # Create the Message object
     addr = (host, port)
+    
     if not protocol:
         msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
     else:
@@ -523,14 +524,13 @@ def start_connection(host, port, incoming_queue, protocol=0):
 
     # Register the socket with the selector
     sel.register(sock, selectors.EVENT_READ | selectors.EVENT_WRITE, data=msg_obj)
-    print("DID THIS")
 
     return sel, msg_obj
 
 def main(args):
     host = args.host # TODO: put in config?
     port = args.port
-    protocol = args.protocol
+    protocol = int(args.protocol)
 
     # A queue for receiving messages from the server in the main thread
     incoming_queue = queue.Queue()
