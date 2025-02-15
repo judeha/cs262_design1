@@ -39,3 +39,17 @@ class OpCode(Enum):
     DELETE_MSG = 8
     SEND_MSG = 9
     RECEIVE_MSG = 10
+
+TypeCode = {
+    'int': 0,
+    'str': 1,
+    'bool': 2,
+    'float': 3
+}
+
+TypeCode2 = {
+    0: '>I',
+    1: '>s',
+    2: '?',
+    3: '>f'
+}

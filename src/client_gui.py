@@ -26,6 +26,7 @@ port = config_dict['port']
 ui_dimensions = config_dict['ui_dimensions']
 content_encoding = config_dict['encoding']
 emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
+max_view = config_dict["max_view"]
 
 # TODO: logging
 # TODO: error enforcement
@@ -298,11 +299,11 @@ class ChatGUI:
 
         # Receiver, message entry fields
         receiver_entry = tk.Entry(input_frame)
-        self._set_placeholder(receiver_entry, "Receiver:")
+        # self._set_placeholder(receiver_entry, "Receiver:")
 
         receiver_entry.pack(side='left', padx=10, fill="x", expand=False)
         message_entry = tk.Entry(input_frame)
-        self._set_placeholder(message_entry, "Type your message...")
+        # self._set_placeholder(message_entry, "Type your message...")
 
         message_entry.pack(side='left', padx=20, fill="x", expand=True)
         receiver_label = tk.Label(frame, text="recipient", fg=BG_COLOR, highlightbackground=BG_COLOR)
@@ -551,5 +552,5 @@ if __name__ == "__main__":
     parser.add_argument("--protocol", default=0)
     args = parser.parse_args()
 
-    main()
+    main(args)
 

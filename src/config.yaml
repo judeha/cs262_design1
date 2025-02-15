@@ -11,6 +11,7 @@ host: "127.0.0.1"
 port: 65432
 ui_dimensions: "800x500"
 encoding: "utf-8"
+max_view: 4000
 
 bg_color: "#043729"
 btn_txt_color: "#FFFFFF"
