@@ -176,6 +176,7 @@ class Message:
             else:
                 result = {"status_code": ResponseCode.ACCOUNT_EXISTS.value} # TODO: cleanup
         elif opcode == OpCode.CREATE_ACCOUNT.value:
+            print(args)
             result = self.db.create_account(*args)
         elif opcode == OpCode.LOGIN_ACCOUNT.value:
             result = self.db.login_account(*args)
@@ -198,6 +199,9 @@ class Message:
             result = self.db.fetch_messages_delivered(*args)
         elif opcode == OpCode.DELETE_MSG.value:
             result = self.db.delete_messages(*args)
+        elif opcode == OpCode.MATCH.value:
+            result = self.db.match_users(*args)
+            print("RESULT   ", result)
         elif opcode == OpCode.SEND_MSG.value:
             sender = args[0]
             receiver = args[1]

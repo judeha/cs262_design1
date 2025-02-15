@@ -100,6 +100,7 @@ class ChatGUI:
         self.count = 0
         self.accounts = []
         self.username = ""
+        self.nemesis = []
 
         # Set up all wireframes
         self.frames = {}
@@ -190,6 +191,9 @@ class ChatGUI:
                         if len(self.messages) > MAX_VIEW:
                             self.messages.pop(0)
                         self.show_frame("homepage")
+                    elif opcode == OpCode.MATCH.value:
+                        self.nemesis = data
+                        self.show_frame("nemesis")
             except queue.Empty:
                 break
             else:
@@ -223,16 +227,19 @@ class ChatGUI:
         # Messages
         tk.Label(frame, text="Please create an account to continue.").pack(pady=10) # TODO: use config username/password enforcements
 
-        # Username, password entry fields
+        # Username, password, bio entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
         username = tk.Entry(frame)
         username.pack(pady=5)
         tk.Label(frame, text="Password:").pack(pady=5)
         password = tk.Entry(frame, show="*")
         password.pack(pady=5)
+        tk.Label(frame, text="Bio:").pack(pady=5)
+        bio = tk.Entry(frame)
+        bio.pack(pady=5)
 
         # Next button
-        create_btn = tk.Button(frame, text="Create", command=lambda: self._on_create_account(username, password))
+        create_btn = tk.Button(frame, text="Create", command=lambda: self._on_create_account(username, password, bio))
         create_btn.pack(pady=10)
 
         return frame
@@ -342,6 +349,11 @@ class ChatGUI:
                                     command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
         fetch_unread_btn.grid(row=12, column=0, pady=5, sticky="ew")
 
+        # Find my nemesis
+        match_btn = tk.Button(control_frame, text='Find my nemesis', 
+                            command=lambda: self.send_message(OpCode.MATCH.value, [self.username]))
+        match_btn.grid(row=15, column=0, pady=5, sticky="ew")
+
         # Bottom section: Message Entry & Send Button
         input_frame = tk.Frame(frame, bg=BG_COLOR)
         input_frame.grid(row=3, column=0, columnspan=3, pady=15, sticky="nsew")
@@ -379,6 +391,37 @@ class ChatGUI:
 
         return frame
 
+    def setup_nemesis_frame(self):
+        """Set up the nemesis frame with information about your nemesis."""
+        frame = tk.Frame(self.container, bg=BG_COLOR)
+        tk.Label(frame, text="Your Nemesis", font=("Arial", 14, "bold"), fg="white", bg=BG_COLOR).pack(pady=5)
+
+        # Create a frame for displaying nemesis information
+        nemesis_frame = tk.Frame(frame, bg=BG_COLOR)
+        nemesis_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Chatbox (read-only text widget)
+        self.nemesis_display = tk.Text(nemesis_frame, width=50, height=10, state='disabled', wrap='word', bg="black", fg="white")
+        self.nemesis_display.pack(fill='both', expand=True)
+
+        # Home button
+        home_btn = tk.Button(frame, text='Homepage', command=lambda: self.show_frame("homepage"))
+        home_btn.pack(pady=10)
+
+        return frame
+        
+    def display_nemesis(self, nemesis_data):
+        """Displays match results in the text widget."""
+        self.nemesis_display.config(state='normal')  # Enable editing temporarily
+        self.nemesis_display.delete(1.0, tk.END)  # Clear old accounts
+        username, bio = nemesis_data[0]
+        percentage = nemesis_data[1]
+        text = f"Your worst nemesis is {username}\nBio: {bio}\nYou and {username} are a {percentage}% match to be nemeses for life.\n"
+        self.nemesis_display.insert(tk.END, text)
+
+        self.nemesis_display.config(state='disabled')  # Disable editing again
+        self.nemesis_display.see(tk.END)  # Auto-scroll to latest message       
+
     def setup_frames(self):
         """Set up all the frames for the chat application."""
         self.frames["main"] = self.setup_main_frame()
@@ -386,6 +429,7 @@ class ChatGUI:
         self.frames["login"] = self.setup_login_frame()
         self.frames["homepage"] = self.setup_homepage_frame()
         self.frames["list_accounts"] = self.setup_list_accounts_frame()
+        self.frames["nemesis"] = self.setup_nemesis_frame()
 
         for frame in self.frames.values():
             # Place each frame in the same row/column so they overlap
@@ -403,6 +447,9 @@ class ChatGUI:
         
         if frame_name == "list_accounts":
             self.display_accounts()
+
+        if frame_name == "nemesis":
+            self.display_nemesis(self.nemesis)
 
     def display_error(self, message):
         """ Displays an error message in the global error label. """
@@ -433,9 +480,9 @@ class ChatGUI:
         self.accounts_display.config(state='normal')  # Enable editing temporarily
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
         for acc in self.accounts:
-            id, username = acc
+            id, username, bio = acc
             emoji_idx = random.randint(0, len(EMOJIS) - 1)
-            text = f"{EMOJIS[emoji_idx]} {id} : {username}\n"
+            text = f"{id}) {username} {EMOJIS[emoji_idx]} : {bio}\n\n"
             self.accounts_display.insert(tk.END, text)
 
         self.accounts_display.config(state='disabled')  # Disable editing again
@@ -445,10 +492,10 @@ class ChatGUI:
         # Call the server to check if the username exists
         self.send_message(OpCode.ACCOUNT_EXISTS.value, [username.get()])
 
-    def _on_create_account(self, username, password):
+    def _on_create_account(self, username, password, bio):
         # Call the server to create an account
         self.send_message(OpCode.CREATE_ACCOUNT.value, 
-                          [username.get(), self._hash_password(password.get())])
+                          [username.get(), self._hash_password(password.get()), bio.get()])
 
     def _hash_password(self, password):
         # Hash the password before sending it to the server

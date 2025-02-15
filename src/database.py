@@ -3,6 +3,8 @@ from utils import ResponseCode
 from typing import Union
 import yaml
 import logging
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -23,11 +25,14 @@ MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
 MAX_VIEW = config["max_view"]
 
+# Load embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')  # Fast and accurate
+
 class DatabaseHandler():
     """ Database handler class that executes actions given to it by the server.
     
     Methods:
-    - create_account(username, password): status_code
+    - create_account(username, password, bio): status_code
     - login_account(username, password): status_code, data[unread_count, messages]
     - delete_account(username, password): status_code
     - fetch_homepage(username): status_code, data[unread_count, messages]
@@ -49,7 +54,7 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
 
-    def create_account(self, username, password) -> dict[int]:
+    def create_account(self, username, password, bio) -> dict[int]:
         """ Given username and password, return account creation status """
         try:
             # Enforce username and password constraints
@@ -59,7 +64,11 @@ class DatabaseHandler():
             if self.account_exists(username):
                 return {"status_code": ResponseCode.ACCOUNT_EXISTS.value}
             # Create account
-            self.cursor.execute("INSERT INTO accounts (username, password) VALUES (?, ?)", (username, password))
+            self.cursor.execute("INSERT INTO accounts (username, password, bio) VALUES (?, ?, ?)", (username, password, bio))
+            # Embed bio
+            bio_embedding = model.encode(bio)  # convert bio to vector
+            bio_embedding_blob = bio_embedding.tobytes()  # convert to BLOB object
+            self.cursor.execute("UPDATE accounts SET bio_embedding = ? WHERE username = ?", (bio_embedding_blob, username))
             self.conn.commit()
             return {"status_code": ResponseCode.SUCCESS.value}
         except sqlite3.Error as e:
@@ -121,10 +130,10 @@ class DatabaseHandler():
         try:
             # Fetch all accounts that match the pattern
             if pattern is not None:
-                self.cursor.execute("SELECT id, username FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
+                self.cursor.execute("SELECT id, username, bio FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
             # Fetch all accounts
             else:
-                self.cursor.execute("SELECT id, username FROM accounts")
+                self.cursor.execute("SELECT id, username, bio FROM accounts")
             accounts = self.cursor.fetchall()
             return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
@@ -193,7 +202,49 @@ class DatabaseHandler():
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
-    
+        
+    def match_users(self, username) -> list:
+        """Find the most similar user based on bio using cosine similarity."""
+        try:
+            # Fetch the user's embedding
+            self.cursor.execute("SELECT bio_embedding FROM accounts WHERE username=?", (username,))
+            my_blob = self.cursor.fetchone()[0]
+            # Convert BLOB back to NumPy array
+            my_embedding = np.frombuffer(my_blob, dtype=np.float32)
+
+            # Fetch all other users' embeddings
+            user_ids, _, bio_vectors = self.get_all_embeddings()
+
+            # Compute cosine similarity
+            similarities = np.dot(bio_vectors, my_embedding) / (np.linalg.norm(bio_vectors, axis=1) * np.linalg.norm(my_embedding))
+
+            # Get the worst match
+            worst_idx = np.argmin(similarities)
+            # Get how much you don't match
+            worst_similarity = round(similarities[worst_idx] * 100)
+
+            # Return the worst match's username and bio
+            self.cursor.execute("SELECT username, bio FROM accounts WHERE id=?", (user_ids[worst_idx],))
+            worst_match = self.cursor.fetchone()
+            return {"status_code": ResponseCode.SUCCESS.value, "data": [worst_match, worst_similarity]}
+        except sqlite3.Error as e:
+            logging.error(f"Database error: {e}")
+            return {"status_code": ResponseCode.DATABASE_ERROR.value}
+
+    def get_all_embeddings(self):
+        self.cursor.execute("SELECT id, username, bio_embedding FROM accounts WHERE bio_embedding IS NOT NULL")
+        users = self.cursor.fetchall()
+        
+        user_ids, usernames, bio_vectors = [], [], []
+        
+        for user_id, username, blob in users:
+            bio_vector = np.frombuffer(blob, dtype=np.float32)  # Convert BLOB back to NumPy array
+            user_ids.append(user_id)
+            usernames.append(username)
+            bio_vectors.append(bio_vector)
+        
+        return user_ids, usernames, np.array(bio_vectors)
+
     def count_messages(self, username, delivered: bool) -> int:
         """ Given a username and delivered status, return the count of delivered or undelivered messages """
         try:

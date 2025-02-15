@@ -127,6 +127,7 @@ class Message:
         # Encode protoheader and package message
         message_hdr = struct.pack(">H", VERSION) + struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
+
         return message
     
     def _process_response(self):
