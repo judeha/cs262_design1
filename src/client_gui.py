@@ -2,6 +2,7 @@
 import argparse
 import socket
 import yaml
+import logging
 import copy
 import selectors
 import threading
@@ -13,19 +14,25 @@ from utils import OpCode, ResponseCode, RESPONSE_MESSAGES
 from client_handler import Message, MessageCustom
 import random
 
-# Read config file
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Load configuration
 yaml_path = "config.yaml"
-with open(yaml_path) as y:
-    config_dict = yaml.safe_load(y)
-BG_COLOR = config_dict['bg_color']
-BTN_TXT_COLOR = config_dict['btn_txt_color']
-BTN_BG_COLOR = config_dict['btn_bg_color']
-host = config_dict['host']
-port = config_dict['port']
-ui_dimensions = config_dict['ui_dimensions']
-content_encoding = config_dict['encoding']
-emojis = ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","👳‍♂️","🏖","🖍"]
-max_view = config_dict["max_view"]
+with open(yaml_path, "r") as y:
+    config = yaml.safe_load(y)
+
+# Defaults
+BG_COLOR = config['bg_color']
+BTN_TXT_COLOR = config['btn_txt_color']
+BTN_BG_COLOR = config['btn_bg_color']
+HOST = config['host']
+PORT = config['port']
+PROTOCOL = config['protocol']
+UI_DIMENSIONS = config['ui_dimensions']
+CONTENT_ENCODING = config['encoding']
+EMOJIS = config['emojis']
+MAX_VIEW = config["max_view"]
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages the selector event while loop
@@ -55,7 +62,7 @@ class SelectorThread(threading.Thread):
                 try:
                     message_obj.process_events(mask)
                 except Exception as e:
-                    print(f"[SelectorThread] Error in process_events: {e}")
+                    logging.error(f"[SelectorThread] Error in process_events: {e}")
                     message_obj.close()
 
         # Cleanup when stop_event is triggered
@@ -67,7 +74,7 @@ class SelectorThread(threading.Thread):
 
 class ChatGUI:
     """
-    A simple Tkinter GUI that displays incoming messages and sends new requests.
+    A client GUI that displays incoming messages and sends new requests.
     """
     def __init__(self, root, message_obj, incoming_queue,protocol=0):
         """
@@ -81,7 +88,7 @@ class ChatGUI:
 
         # Set up the main window
         self.root.title("MyChat")
-        self.root.geometry(ui_dimensions) 
+        self.root.geometry(UI_DIMENSIONS) 
         self.container = tk.Frame(root, bg=BG_COLOR)
         self.container.pack(expand=True, fill=tk.BOTH)
 
@@ -110,7 +117,7 @@ class ChatGUI:
         if opcode is not None:
             # Here is where you craft the request dictionary that your `Message` object expects
             request = dict(
-                content_encoding= content_encoding, 
+                content_encoding= CONTENT_ENCODING, 
                 opcode=opcode,
                 content= {"args": args},
             )
@@ -174,7 +181,7 @@ class ChatGUI:
                     # If receiving message, update messages and stay on homepage
                     elif opcode == OpCode.RECEIVE_MSG.value:
                         self.messages += data
-                        if len(self.messages) > max_view:
+                        if len(self.messages) > MAX_VIEW:
                             self.messages.pop(0)
                         self.show_frame("homepage")
             except queue.Empty:
@@ -207,6 +214,7 @@ class ChatGUI:
         return frame
     
     def setup_create_account_frame(self):
+        """Set up the create account frame with username and password fields."""
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
         # Messages
@@ -230,6 +238,7 @@ class ChatGUI:
         return frame
     
     def setup_login_frame(self):
+        """Set up the login frame with username and password fields."""
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
         # Messages
@@ -260,17 +269,18 @@ class ChatGUI:
             self.homepage_title_label.config(text=text)
 
     def setup_homepage_frame(self):
+        """Set up the homepage frame with chat display and message entry."""
         frame = tk.Frame(self.container, bg=BG_COLOR)
 
-        # ✅ Welcome message
+        # Welcome message
         self.homepage_title_label = tk.Label(frame, text="MyChat", font=("Arial", 14, "bold"), fg="white", bg=BG_COLOR)
         self.homepage_title_label.grid(row=0, column=0, columnspan=3, pady=10, sticky="w")
 
-        # ✅ Error message (initially empty)
+        # Error message (initially empty)
         self.error_label = tk.Label(frame, text="", fg="red", bg=BG_COLOR)
         self.error_label.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
-        # ✅ Chat Display
+        # Chat Display
         chat_frame = tk.Frame(frame)
         chat_frame.grid(row=2, column=0, columnspan=3, pady=10, sticky="nsew")
 
@@ -284,7 +294,7 @@ class ChatGUI:
 
         scrollbar.config(command=self.chat_display.yview)  # Link scrollbar
 
-        # ✅ Right-side controls (buttons + entry fields)
+        # Right-side controls (buttons + entry fields)
         control_frame = tk.Frame(frame, bg=BG_COLOR)
         control_frame.grid(row=2, column=3, padx=20, sticky="ns")
 
@@ -340,7 +350,7 @@ class ChatGUI:
                                     command=lambda: self._on_fetch_unread_message(num_unread_msgs_entry))
         fetch_unread_btn.grid(row=12, column=0, pady=5, sticky="ew")
 
-        # ✅ Bottom section: Message Entry & Send Button
+        # Bottom section: Message Entry & Send Button
         input_frame = tk.Frame(frame, bg=BG_COLOR)
         input_frame.grid(row=3, column=0, columnspan=3, pady=15, sticky="nsew")
 
@@ -359,6 +369,7 @@ class ChatGUI:
         return frame
     
     def setup_list_accounts_frame(self):
+        """Set up the list accounts frame with a list of accounts."""
         frame = tk.Frame(self.container, bg=BG_COLOR)
         tk.Label(frame, text="List of Accounts").pack(pady=5)
 
@@ -376,16 +387,13 @@ class ChatGUI:
 
         return frame
 
-    def setup_my_matches_frame(self):
-        pass
-
     def setup_frames(self):
+        """Set up all the frames for the chat application."""
         self.frames["main"] = self.setup_main_frame()
         self.frames["create_account"] = self.setup_create_account_frame()
         self.frames["login"] = self.setup_login_frame()
         self.frames["homepage"] = self.setup_homepage_frame()
         self.frames["list_accounts"] = self.setup_list_accounts_frame()
-        # self.frames["my_matches"] = self.setup_my_matches_frame()
 
         for frame in self.frames.values():
             # Place each frame in the same row/column so they overlap
@@ -435,8 +443,8 @@ class ChatGUI:
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
         for acc in self.accounts:
             id, username = acc
-            emoji_idx = random.randint(0, len(emojis) - 1)
-            text = f"{emojis[emoji_idx]} {id} : {username}\n"
+            emoji_idx = random.randint(0, len(EMOJIS) - 1)
+            text = f"{EMOJIS[emoji_idx]} {id} : {username}\n"
             self.accounts_display.insert(tk.END, text)
 
         self.accounts_display.config(state='disabled')  # Disable editing again
@@ -452,40 +460,46 @@ class ChatGUI:
                           [username.get(), self._hash_password(password.get())])
 
     def _hash_password(self, password):
+        # Hash the password before sending it to the server
         return hashlib.sha256(password.encode()).hexdigest()
 
     def _on_login_account(self, username, password):
+        # Call the server to login
         self.username = copy.deepcopy(username.get())
-        print("USERNAME:", self.username)
         self.password = password.get()
         self.send_message(OpCode.LOGIN_ACCOUNT.value, 
                           [username.get(), self._hash_password(password.get())])
     
     def _on_delete_account(self, username, password):
+        # Call the server to delete the account
         self.send_message(OpCode.DELETE_ACCOUNT.value, [username, password])
 
     def _on_delete_messages(self, username, delete_msgs):
+        # Call the server to delete messages
         delete_msgs = delete_msgs.get().split(",")
         delete_msgs = [int(msg) for msg in delete_msgs] # TODO: find a better way
         self.send_message(OpCode.DELETE_MSG.value, [username, delete_msgs])
 
     def _on_send_message(self, receiver, message):
+        # Call the server to send a message
         self.send_message(OpCode.SEND_MSG.value, [self.username, receiver.get(), message.get()])
         # Clear the message field
         message.delete(0, tk.END)
         receiver.delete(0, tk.END)
 
-    def _on_list_accounts(self, list_acc_entry): # TODO: fix
-        print("HEY,", list_acc_entry.get())
+    def _on_list_accounts(self, list_acc_entry):
+        # Call the server to list accounts
         if list_acc_entry.get() == "":
             self.send_message(OpCode.LIST_ACCOUNTS.value, [])
         else:
             self.send_message(OpCode.LIST_ACCOUNTS.value, list_acc_entry.get())
 
     def _on_fetch_unread_message(self, num_msgs):
+        # Call the server to fetch unread messages
         self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, int(num_msgs.get())])
 
     def _on_fetch_read_message(self, num_msgs):
+        # Call the server to fetch read messages
         self.send_message(OpCode.READ_MSG_DELIVERED.value, [self.username, int(num_msgs.get())])
 # -----------------------------------------------------------------------------
 # Main Client Launcher
@@ -507,9 +521,9 @@ def start_connection(host, port, incoming_queue, protocol=0):
     except BlockingIOError:
         pass
 
-    # Build initial request
+    # Build initial request for server
     initial_request = {
-        "content_encoding": content_encoding,
+        "content_encoding": CONTENT_ENCODING,
         "opcode": OpCode.STARTING.value,
         "content": {"args": []},  # TODO: fragile
     }
@@ -517,6 +531,7 @@ def start_connection(host, port, incoming_queue, protocol=0):
     # Create the Message object
     addr = (host, port)
     
+    # Use the default or custom protocol
     if not protocol:
         msg_obj = Message(selector=sel, sock=sock, addr=addr, request=initial_request, incoming_queue=incoming_queue)
     else:
@@ -528,46 +543,43 @@ def start_connection(host, port, incoming_queue, protocol=0):
     return sel, msg_obj
 
 def main(args):
-    host = args.host # TODO: put in config?
+    host = args.host
     port = args.port
     protocol = int(args.protocol)
 
     # A queue for receiving messages from the server in the main thread
     incoming_queue = queue.Queue()
 
-    # 1) Set up socket + selector + register them with an initial request
+    # Set up socket + selector + register them with an initial request
     sel, message_obj = start_connection(host, port, incoming_queue, protocol)
 
-    # 2) Create a stop event so we can shut down the selector thread
+    # Create a stop event to shut down the selector thread
     stop_event = threading.Event()
 
-    # 3) Start the background selector thread
+    # Start the background selector thread
     sel_thread = SelectorThread(sel, stop_event, incoming_queue)
     sel_thread.start()
 
-    # 4) Set up Tkinter in the main thread
+    # Set up client GUI
     root = tk.Tk()
     app = ChatGUI(root, message_obj, incoming_queue, protocol=protocol)
 
-    # On close, signal the selector thread to stop, close the socket, etc.
+    # Define close loop
     def on_close():
         """Handle cleanup when closing the client window."""
-        # Stop selector thread
-        stop_event.set()
-        # Close connection
-        message_obj.close()
-        # Destroy GUI
-        root.destroy()
-
+        stop_event.set() # stop selector thread
+        message_obj.close() # close socket
+        root.destroy() # destroy client gui
+    # Set close event as window close
     root.protocol("WM_DELETE_WINDOW", on_close)
+
     root.mainloop()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=65432)
-    parser.add_argument("--protocol", default=0)
+    parser.add_argument("--host", default=HOST)
+    parser.add_argument("--port", type=int, default=PORT)
+    parser.add_argument("--protocol", default=PROTOCOL)
     args = parser.parse_args()
 
     main(args)
-

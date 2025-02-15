@@ -4,29 +4,57 @@ import selectors
 import struct
 import yaml
 import hashlib
-# import yaml
+import yaml
+import logging
 from utils import encode_protocol, decode_protocol
 
-# Read config file
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Load configuration
 yaml_path = "config.yaml"
-with open(yaml_path) as y:
-    config_dict = yaml.safe_load(y)
-version = config_dict["version"]
-key = config_dict["key"]
-db_path = config_dict["db_path"]
+with open(yaml_path, "r") as y:
+    config = yaml.safe_load(y)
+
+# Defaults
+VERSION = config["version"]
+DB_PATH = config["db_path"]
+MIN_MESSAGE_LEN = config["min_message_len"]
+MAX_MESSAGE_LEN = config["max_message_len"]
 
 class Message:
+    """ Message class for handling client-server communication using JSON encoding. Message is (fuzzily) equivalent to a client-stub.
+
+    Methods:
+    - _set_selector_events_mask(self, mode): Set selector to listen for events: mode is 'r', 'w', or 'rw'.
+    - _read(self): Read data from socket.
+    - _write(self): Write data to socket.
+    - _json_encode(self, obj, encoding): Encode JSON object.
+    - _json_decode(self, json_bytes, encoding): Decode JSON object.
+    - _package_request(self, req): Package a request into a message.
+    - _process_response(self): Process received response data.
+    - _generate_action(self, opcode, status_code, data): Generate an action based on response data.
+    - process_events(self, mask): Process events based on mask.
+    - read(self): Read data from socket.
+    - write(self): Write data to socket.
+    - close(self): Close the connection.
+    - queue_request(self): Queue a request for sending.
+    - process_protoheader(self): Process protoheader from received buffer.
+    - process_header(self): Process header from received buffer.
+    - _hash_password(self, password): Hash a password using SHA-256.
+    """
     def __init__(self, selector, sock, addr, request, incoming_queue=None):
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = request
+        self.request = request # Request to send
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
         self._header_len = None
         self._header = None
-        self.response = None
+        self.response = None # Response received
+        # Incoming queue for processing responses, shared with client GUI
         self.incoming_queue = incoming_queue
 
     def _set_selector_events_mask(self, mode):
@@ -38,10 +66,11 @@ class Message:
         elif mode == "rw":
             events = selectors.EVENT_READ | selectors.EVENT_WRITE
         else:
-            raise ValueError(f"Invalid events mask mode {mode!r}.")
+            logging.error(f"Invalid events mask: {mode}")
         self.selector.modify(self.sock, events, data=self)
 
     def _read(self):
+        """Read data from socket."""
         try:
             # Should be ready to read
             data = self.sock.recv(4096)
@@ -52,9 +81,10 @@ class Message:
             if data:
                 self._recv_buffer += data
             else:
-                raise RuntimeError("Peer closed.")
+                logging.info(f"Closing connection to {self.addr}")
 
     def _write(self):
+        """Write data to socket."""
         if self._send_buffer:
             print(f"Sending {self._send_buffer!r} to {self.addr}")
             try:
@@ -67,9 +97,11 @@ class Message:
                 self._send_buffer = self._send_buffer[sent:]
 
     def _json_encode(self, obj, encoding):
+        """Encode JSON object."""
         return json.dumps(obj, ensure_ascii=False).encode(encoding)
 
     def _json_decode(self, json_bytes, encoding):
+        """Decode JSON object."""
         tiow = io.TextIOWrapper(
             io.BytesIO(json_bytes), encoding=encoding, newline=""
         )
@@ -79,6 +111,7 @@ class Message:
 
     def _package_request(
         self, req):
+        """Package a request into a message."""
         # Encode content
         encoding = req["content_encoding"]
         content_bytes = self._json_encode(req["content"], encoding)
@@ -92,11 +125,12 @@ class Message:
         }
         jsonheader_bytes = self._json_encode(jsonheader, encoding)
         # Encode protoheader and package message
-        message_hdr = struct.pack(">H", version) + struct.pack(">H", len(jsonheader_bytes))
+        message_hdr = struct.pack(">H", VERSION) + struct.pack(">H", len(jsonheader_bytes))
         message = message_hdr + jsonheader_bytes + content_bytes
         return message
     
     def _process_response(self):
+        """Process received response data."""
         # Check if request is fully received
         content_len = self._header["content_length"]
         if not len(self._recv_buffer) >= content_len: # TODO: exception
@@ -119,26 +153,27 @@ class Message:
         # Process response content
         self._generate_action(opcode, status_code, data)
 
-        # Close when response has been processed
-        # self.close() # TODO: fix
-
     def _generate_action(self, opcode, status_code, data):
+        """Queue an action based on response data."""
         self.incoming_queue.put({"opcode": opcode, "status_code": status_code, "data": data})
 
     def process_events(self, mask):
+        """Process incoming events based on mask."""
         if mask & selectors.EVENT_READ:
             self.read()
         if mask & selectors.EVENT_WRITE:
             self.write()
 
     def read(self):
+        """Read and process data from socket."""
+        # Clear previous read data
         self._header_len = None
         self._header = None
         self.response = None
         self._request_queued = False
         self._read()
 
-        # Decode protoheader: get request type
+        # Decode protoheader
         if self._header_len is None:
             self.process_protoheader()
 
@@ -150,6 +185,8 @@ class Message:
             self._process_response()
 
     def write(self):
+        """Write data to socket."""
+        # Make sure there is a request to send
         if not self._request_queued:
             self.queue_request()
         
@@ -157,32 +194,32 @@ class Message:
 
         if self._request_queued and not self._send_buffer:
             # Set selector to listen for read events, we're done writing.
-            self._set_selector_events_mask("r") # TODO: why doesn't this keep the connection open?
+            self._set_selector_events_mask("r")
 
     def close(self):
-        print(f"Closing connection to {self.addr}")
+        """Close the connection."""
+        logging.info(f"Closing connection to {self.addr}")
         try:
             self.selector.unregister(self.sock)
         except Exception as e:
-            print(
-                f"Error: selector.unregister() exception for "
-                f"{self.addr}: {e!r}"
-            )
+            logging.error(f"Error: selector.unregister() exception for {self.addr}: {repr(e)}")
 
     def queue_request(self):
+        """Queue a request to _send_buffer for sending."""
         message = self._package_request(self.request)
         self._send_buffer += message
         self._request_queued = True
         
     def process_protoheader(self):
+        """Process protoheader from received buffer."""
         hdrlen = 2
         
         if len(self._recv_buffer) >= hdrlen:
             v = struct.unpack(
                 ">H", self._recv_buffer[:hdrlen]
             )[0]
-            if v != version: 
-                raise ValueError(f"Unsupported version: {v}")
+            if v != VERSION: 
+                logging.error(f"Invalid protocol version: {v}")
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
 
@@ -193,24 +230,33 @@ class Message:
             self._recv_buffer = self._recv_buffer[hdrlen:]
 
     def process_header(self):
+        """Process header from received buffer."""
         hdrlen = self._header_len
+        # Check if header is fully received
         if len(self._recv_buffer) >= hdrlen:
             self._header = self._json_decode(self._recv_buffer[:hdrlen], "utf-8")
             self._recv_buffer = self._recv_buffer[hdrlen:]
+            # Validate header fields
             for reqhdr in (
-                # "byteorder",
                 "content_length",
-                # "content_type",
                 "content_encoding",
                 "opcode"
             ):
                 if reqhdr not in self._header:
-                    raise ValueError(f"Missing required header '{reqhdr}'.")
+                    logging.error(f"Missing required header '{reqhdr}'.")
                 
     def _hash_password(self, password):
+        # Hash a password using SHA-256
         return hashlib.sha256(password)
 
 class MessageCustom(Message):
+    """Custom message class for handling client-server communication using a custom encoding protocol. Inherited from Message.
+    
+    Modified methods:
+    - _package_request(self, req)
+    - _process_response(self)
+    - process_header(self)
+    """
     def __init__(self, selector, sock, addr, request, incoming_queue=None):
         super().__init__(selector=selector, sock=sock, addr=addr, request=request, incoming_queue=incoming_queue)
 
@@ -224,7 +270,7 @@ class MessageCustom(Message):
         header_bytes = encode_protocol(header)  # Serialize header
 
         # Encode protoheader and package message
-        message_hdr = struct.pack(">H", version) + struct.pack(">H", len(header_bytes))
+        message_hdr = struct.pack(">H", VERSION) + struct.pack(">H", len(header_bytes))
         message = message_hdr + header_bytes + content_bytes
 
         return message
@@ -241,13 +287,12 @@ class MessageCustom(Message):
         # Decode content using custom protocol
         decoded_data = decode_protocol(data)
         if not decoded_data:
-            raise ValueError("Failed to decode response data.")
+            logging.error("Failed to decode response data.")
 
         # Extract status code and remaining response data
         status_code = decoded_data[0]
         response_data = decoded_data[1:]
-
-        print(f"Received response {response_data!r} from {self.addr}")
+        logging.info(f"Received response: status_code={status_code}, data={response_data}")
 
         opcode = self._header.get("opcode")
         self._generate_action(opcode, status_code, response_data)
@@ -262,7 +307,8 @@ class MessageCustom(Message):
 
             decoded_header = decode_protocol(header_data)
             if not decoded_header or len(decoded_header) < 3:
-                raise ValueError("Invalid header format")
+                logging.error("Failed to decode header data.")
+                return
 
             self._header = {
                 "content_encoding": decoded_header[0],
@@ -273,4 +319,4 @@ class MessageCustom(Message):
             # Validate header fields
             for reqhdr in ("content_encoding", "content_length", "opcode"):
                 if reqhdr not in self._header:
-                    raise ValueError(f"Missing required header '{reqhdr}'.")
+                    logging.error(f"Missing required header '{reqhdr}'.")
