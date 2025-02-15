@@ -93,6 +93,9 @@ class ChatGUI:
         self.container.pack(expand=True, fill=tk.BOTH)
 
         # Initialize chat display variables
+        # Global error label (always visible)
+        self.error_label = tk.Label(self.container, text="", fg="red", bg=BG_COLOR)
+        self.error_label.grid(row=1, column=0, pady=10)
         self.messages = []
         self.count = 0
         self.accounts = []
@@ -148,8 +151,11 @@ class ChatGUI:
                     self.show_frame("main")
                 elif opcode != OpCode.ACCOUNT_EXISTS.value and status_code != ResponseCode.SUCCESS.value:
                     # Stay in the same frame if the request failed and display error message
-                    self.display_error(RESPONSE_MESSAGES[status_code])
+                    self.display_error(RESPONSE_MESSAGES.get(status_code, "Unknown error"))
+                    # continue
                 else:
+                    # Set errror label to empty
+                    self.display_error("")
                     # If new user, create account
                     if opcode == OpCode.ACCOUNT_EXISTS.value and status_code == ResponseCode.ACCOUNT_NOT_FOUND.value:
                         self.show_frame("create_account")
@@ -198,9 +204,6 @@ class ChatGUI:
 
         # Messages
         tk.Label(frame, text="Welcome to MyChat! Check if you have an account.").pack(pady=10)
-        # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
-        self.error_label.pack(pady=5)  # Show at the top
 
         # Username entry field
         tk.Label(frame, text="Username:").pack(pady=5)
@@ -219,9 +222,6 @@ class ChatGUI:
 
         # Messages
         tk.Label(frame, text="Please create an account to continue.").pack(pady=10) # TODO: use config username/password enforcements
-        # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
-        self.error_label.pack(pady=5)  # Show at the top
 
         # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
@@ -243,10 +243,6 @@ class ChatGUI:
 
         # Messages
         tk.Label(frame, text="Enter your username and password to login").pack(pady=10)
-
-        # Error message (initially hidden)
-        self.error_label = tk.Label(frame, text="", fg="white", bg=BG_COLOR)
-        self.error_label.pack(pady=5,)  # Show at the top
 
         # Username, password entry fields
         tk.Label(frame, text="Username:").pack(pady=5)
@@ -275,10 +271,6 @@ class ChatGUI:
         # Welcome message
         self.homepage_title_label = tk.Label(frame, text="MyChat", font=("Arial", 14, "bold"), fg="white", bg=BG_COLOR)
         self.homepage_title_label.grid(row=0, column=0, columnspan=3, pady=10, sticky="w")
-
-        # Error message (initially empty)
-        self.error_label = tk.Label(frame, text="", fg="red", bg=BG_COLOR)
-        self.error_label.grid(row=1, column=0, columnspan=3, pady=5, sticky="w")
 
         # Chat Display
         chat_frame = tk.Frame(frame)
@@ -413,9 +405,8 @@ class ChatGUI:
             self.display_accounts()
 
     def display_error(self, message):
-        """Displays an error message on the current frame without switching frames."""
-        if hasattr(self, "error_label"):  # Ensure the label exists
-            self.error_label.config(text=message)
+        """ Displays an error message in the global error label. """
+        self.error_label.config(text=message)
     
     def display_messages(self):
         """Display messages in chat_display, ordered from oldest to newest."""
