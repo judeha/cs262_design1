@@ -68,6 +68,9 @@ class DatabaseHandler():
             # Delete account
             self.cursor.execute("DELETE FROM accounts WHERE username=?", (username,))
             self.conn.commit() # NOTE: unsent messages will be stored in undelivered
+            # Delete all messages to this username
+            self.cursor.execute("DELETE FROM messages WHERE receiver=?", (username,))
+            self.conn.commit()
             return {"status_code": ResponseCode.SUCCESS.value}
         except sqlite3.Error as e:
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
@@ -88,7 +91,6 @@ class DatabaseHandler():
     def list_accounts(self, pattern:str=None) -> dict[int, list[tuple]]:
         """ Return a list of all accounts """
         try:
-            print("PATTERN", pattern)
             # Fetch all accounts
             if pattern is not None:
                 self.cursor.execute("SELECT id, username FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
@@ -184,24 +186,3 @@ class DatabaseHandler():
         self.conn.close()
         # os.remove('messages.db')
 
-# database_setup()
-# DB = DatabaseHandler()
-# status = DB.create_account("hannah", "password")
-# status = DB.account_exists("hannah")
-# print(status)
-# DB.close()
-# status = DB.create_account("bob", "pa$$word")
-# print(status)
-# status = DB.login_account("hannah", "secret")
-# print(status)
-# status = DB.login_account("hannah", "$ecret")
-# print(status)
-
-# status = DB.insert_message("hannah", "bob", "Hello, Bob!", 1234567890, 0)
-# status = DB.insert_message("hannah", "bob", "BOB RESPOND!", 1234567895, 0)
-# print(status)
-# DB.login_account("bob", "pa$$word")
-# count = DB.count_messages("bob", False)
-# print(count)
-# status = DB.fetch_messages("bob", 2, False)
-# print(status)
