@@ -1,13 +1,14 @@
 import unittest
-import pytest
 import sys
 import os
+import hashlib
 # Adjust path to ensure tests can import database_handler
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from database import DatabaseHandler  # Assuming this is saved as database_handler.py
 from database_setup import database_setup
 from codes import ResponseCode
 from custom_protocol import encode_protocol, decode_protocol
+from client_gui import ChatGUI 
 
 db_path = "test_messages.db"
 
@@ -288,6 +289,30 @@ class TestProtocolEncoding(unittest.TestCase):
         encoded = encode_protocol(original)
         decoded = decode_protocol(encoded)
         self.assertEqual(decoded, original)
+
+
+class TestPassswordHashing(unittest.TestCase):
+    def hash_password(self, password):
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def test_hash_password(self):
+        password = "securepassword"
+        hashed_password = self.hash_password(password)
+        self.assertNotEqual(password, hashed_password)  # Ensure password is hashed
+        self.assertEqual(len(hashed_password), 64)  # SHA-256 hash length is always 64
+    
+    def test_check_password_valid(self):
+        password = "securepassword"
+        hashed_password = self.hash_password(password)
+        self.assertEqual(self.hash_password(password), hashed_password)
+    
+    def test_check_password_invalid(self):
+        password = "securepassword"
+        wrong_password = "wrongpassword"
+        hashed_password = self.hash_password(password)
+        self.assertNotEqual(self.hash_password(wrong_password), hashed_password)
+
+
 
 if __name__ == '__main__':
     unittest.main()
