@@ -98,7 +98,7 @@ class GRPCClient:
         """Delete an existing account."""
         return self.stub.DeleteAccount(handler_pb2.DeleteAccountRequest(username=username, password=password))
     
-    def list_accounts(self, pattern):
+    def list_accounts(self, pattern=None):
         """List all accounts matching the pattern."""
         return self.stub.ListAccount(handler_pb2.ListAccountRequest(pattern=pattern))
     
@@ -473,47 +473,13 @@ class ChatGUI:
             return
         self.show_frame("create_account")
 
-            #         # Check response type using isinstance()
-            # if isinstance(response, handler_pb2.StartingResponse):
-            #     self.show_frame("main")
-            # elif isinstance(response, handler_pb2.AccountExistsResponse) and response.status_code != ResponseCode.SUCCESS.value:
-            #     self.display_error(RESPONSE_MESSAGES.get(response.status_code, "Unknown error"))
-            # else:
-            #     self.display_error("")
-                # If new user, create account
-                # if isinstance(response, handler_pb2.AccountExistsResponse) and response.status_code == ResponseCode.ACCOUNT_NOT_FOUND.value:
-                #     self.show_frame("create_account")
-                # # If existing user, login
-                # # elif isinstance(response, handler_pb2.AccountExistsResponse) and response.status_code == ResponseCode.ACCOUNT_EXISTS.value:
-                #     self.show_frame("login")
-                # # If account creation successful, login
-                # elif isinstance(response, handler_pb2.CreateAccountResponse) and response.status_code == ResponseCode.SUCCESS.value:
-                #     self.show_frame("login")
-                # # If operation requires homepage to be fetched, show homepage
-                # elif isinstance(response, handler_pb2.LoginAccountResponse) or isinstance(response, handler_pb2.FetchHomepageResponse) or isinstance(response, handler_pb2.FetchMessagesUnreadResponse) or isinstance(response, handler_pb2.DeleteMessageResponse):
-                #     self.count = response.count
-                #     self.messages = response.msg_lst
-                #     self.show_frame("homepage")
-                # # If listing accounts, show accounts
-                # elif isinstance(response, handler_pb2.ListAccountResponse):
-                #     self.accounts = response.acct_lst
-                #     self.show_frame("list_accounts")
-                # # If account deletion successful, show main
-                # elif isinstance(response, handler_pb2.DeleteAccountResponse):
-                #     self.show_frame("main")
-                # # If fetching archived messages, extend homepage length
-                # elif isinstance(response, handler_pb2.FetchMessagesReadResponse):
-                #     self.messages = response.msg_lst
-                #     self.show_frame("homepage")
-                # # If sending message, stay on homepage
-                # elif isinstance(response, handler_pb2.SendMessageResponse):
-                #     self.show_frame("homepage")
-
-
     def _on_create_account(self, username, password, bio):
         # Call the server to create an account
-        self.send_message(OpCode.CREATE_ACCOUNT.value, 
-                          [username.get(), self._hash_password(password.get()), bio.get()])
+        status_code = self.grpc_client.create_account(username.get(), self._hash_password(password.get()), bio.get())
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.show_frame("login")
 
     def _hash_password(self, password):
         # Hash the password before sending it to the server
@@ -521,17 +487,7 @@ class ChatGUI:
 
     def _on_login_account(self, username, password):
         # Call the server to login
-        self.username = copy.deepcopy(username.get())
-        self.password = password.get()
-        self.send_message(OpCode.LOGIN_ACCOUNT.value, 
-                          [username.get(), self._hash_password(password.get())])
-        
-        # TODO: 
-    def _on_login_account(self, username, password):
-        """Login and start message streaming."""
-        self.username = username.get()
-        self.password = password.get()
-        
+        self.username = copy.deepcopy(username.get())        
         status_code, count, messages = self.grpc_client.login(self.username, self._hash_password(password.get()))
         if status_code != ResponseCode.SUCCESS.value:
             self.display_error("Invalid username or password")
@@ -543,21 +499,30 @@ class ChatGUI:
 
         # Start receiving messages
         threading.Thread(target=self.grpc_client.receive_messages, args=(self.username, self.display_messages), daemon=True).start()
-
     
     def _on_delete_account(self, username, password):
         # Call the server to delete the account
-        self.send_message(OpCode.DELETE_ACCOUNT.value, [username, password])
+        status_code = self.grpc_client.delete_account(username, self._hash_password(password.get()))
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.show_frame("main")
 
     def _on_delete_messages(self, username, delete_msgs):
         # Call the server to delete messages
         delete_msgs = delete_msgs.get().split(",")
-        delete_msgs = [int(msg) for msg in delete_msgs] # TODO: find a better way
-        self.send_message(OpCode.DELETE_MSG.value, [username, delete_msgs])
+        delete_msgs = [int(msg) for msg in delete_msgs]
+        status_code, count, msg_lst = self.grpc_client.delete_messages(username, delete_msgs)
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.count = count
+        self.messages = msg_lst
+        self.show_frame("homepage")
 
     def _on_send_message(self, receiver, message):
         # Call the server to send a message
-        self.send_message(OpCode.SEND_MSG.value, [self.username, receiver.get(), message.get()])
+        self.grpc_client.send_message(self.username, receiver.get(), message.get())
         # Clear the message field
         message.delete(0, tk.END)
         receiver.delete(0, tk.END)
@@ -565,17 +530,33 @@ class ChatGUI:
     def _on_list_accounts(self, list_acc_entry):
         # Call the server to list accounts
         if list_acc_entry.get() == "":
-            self.send_message(OpCode.LIST_ACCOUNTS.value, [])
+            status_code, acct_lst = self.grpc_client.list_accounts()
         else:
-            self.send_message(OpCode.LIST_ACCOUNTS.value, list_acc_entry.get())
+            status_code, acct_lst = self.grpc_client.list_accounts(list_acc_entry.get())
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.accounts = acct_lst
+        self.show_frame("list_accounts")
 
     def _on_fetch_unread_message(self, num_msgs):
         # Call the server to fetch unread messages
-        self.send_message(OpCode.READ_MSG_UNDELIVERED.value, [self.username, int(num_msgs.get())])
+        status_code, count, msg_lst = self.grpc_client.fetch_unread_messages(self.username, int(num_msgs.get()))
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.count = count
+        self.messages = msg_lst
+        self.show_frame("homepage")
 
     def _on_fetch_read_message(self, num_msgs):
         # Call the server to fetch read messages
-        self.send_message(OpCode.READ_MSG_DELIVERED.value, [self.username, int(num_msgs.get())])
+        status_code, msg_lst = self.grpc_client.fetch_read_messages(self.username, int(num_msgs.get()))
+        if status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[status_code])
+            return
+        self.messages = msg_lst
+        self.show_frame("homepage")
 # -----------------------------------------------------------------------------
 # Main Client Launcher
 # -----------------------------------------------------------------------------
