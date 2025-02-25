@@ -18,7 +18,6 @@ from utils import encode_protocol, decode_protocol, ResponseCode, OpCode
 import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
-
 import grpc
 
 # Load configuration from YAML file
