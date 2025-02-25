@@ -15,7 +15,7 @@ service Handler {
     rpc FetchMessageRead(FetchMessagesReadRequest) returns (FetchMessagesReadResponse);
     rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
-    rpc ReceiveMessage(google.protobuf.Empty) returns (ReceiveMessageResponse);
+    rpc ReceiveMessage(stream ReceiveMessageResponse) returns (stream ReceiveMessageResponse);
 }
 
 // Message for Starting
