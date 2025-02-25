@@ -108,7 +108,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
-
+            data = result["data"]
             response.acct_lst = data.pop(0)
         return response 
     

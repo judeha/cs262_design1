@@ -465,8 +465,14 @@ class ChatGUI:
         self.messages.sort(key=lambda x: x[4], reverse=False)
         
         # Display in reverse order so newest messages are at the bottom
+
         for msg in self.messages:
-            msg_id, sender, receiver, content, timestamp, _ = msg
+            msg_id = msg.msg_id
+            sender = msg.sender
+            receiver = msg.receiver
+            content = msg.content
+            timestamp = msg.timestamp
+
             timestamp = timestamp / 1_000_000
             readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
             message_text = f"{msg_id}: {sender} -> {receiver} @ {readable_time} | {content}\n\n"
@@ -480,7 +486,10 @@ class ChatGUI:
         self.accounts_display.config(state='normal')  # Enable editing temporarily
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
         for acc in self.accounts:
-            id, username, bio = acc
+            id = acc.id
+            username = acc.username
+            bio = acc.bio
+            
             emoji_idx = random.randint(0, len(EMOJIS) - 1)
             text = f"{id}) {username} {EMOJIS[emoji_idx]} : {bio}\n\n"
             self.accounts_display.insert(tk.END, text)
