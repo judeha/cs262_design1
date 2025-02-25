@@ -97,6 +97,55 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             response.count = data.pop(0)
             response.msg_lst = data
         return response
+    
+    def ListAccount(self, request, context):
+        response = handler_pb2.ListAccountResponse()
+        result = self.db.list_accounts(request.pattern)
+
+        response.status_code = result["status_code"]
+        if result["status_code"] == ResponseCode.SUCCESS.value:
+            data = result["data"]
+            response.acct_lst = data.pop(0)
+        return response 
+    
+    def DeleteAccount(self, request, context):
+        response = handler_pb2.DeleteAccountResponse()
+        result = self.db.delete_account(request.username, request.password)
+        # Package the response
+        response.status_code = result["status_code"]
+        return response
+
+    def FetchHomepage(self, request, context):
+        response = handler_pb2.FetchHomepageResponse()
+        result = self.db.fetch_homepage(request.username)
+
+        response.status_code = result["status_code"]
+        if result["status_code"] == ResponseCode.SUCCESS.value:
+            data = result["data"]
+            response.msg_lst = data.pop(0)
+        return response 
+
+    def FetchMessageRead(self, request, context):
+        response = handler_pb2.FetchMessagesReadResponse()
+        result = self.db.fetch_messages_delivered(request.username, request.num)
+
+        response.status_code = result["status_code"]
+        if result["status_code"] == ResponseCode.SUCCESS.value:
+            data = result["data"]
+            response.msg_lst = data.pop(0)
+        return response 
+
+    def FetchMessageUnread(self, request, context):
+        response = handler_pb2.FetchMessagesUnreadResponse()
+        result = self.db.fetch_messages_undelivered(request.username, request.num)
+
+        response.status_code = result["status_code"]
+        if result["status_code"] == ResponseCode.SUCCESS.value:
+            data = result["data"]
+            response.count = data.pop(0)
+            response.msg_lst = data
+        return self.FetchHomepage(request.username)
+
 
     def _generate_action(self, opcode, args):
         if opcode == OpCode.STARTING.value:
