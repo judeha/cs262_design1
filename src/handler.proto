@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+// gRPC service definition
+service Handler {
+    rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
+    rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+    rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
+    rpc ListAccount(ListAccountRequest) returns (ListAccountResponse);
+    rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
+    rpc FetchHomepage(FetchHomepageRequest) returns (FetchHomepageResponse);
+    rpc FetchMessageUnread(FetchMessagesUnreadRequest) returns (FetchMessagesUnreadResponse);
+    rpc FetchMessageRead(FetchMessagesReadRequest) returns (FetchMessagesReadResponse);
+    rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
+    rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+    rpc ReceiveMessage(google.protobuf.Empty) returns (ReceiveMessageResponse);
+}
+
+// Message for checking if an account exists
+message AccountExistsRequest {
+    string username = 1;
+}
+
+message AccountExistsResponse {
+    int32 status_code = 1;
+    bool exists = 2;
+}
+
+// Message for creating an account
+message CreateAccountRequest {
+    string username = 1;
+    string password = 2;
+    string bio = 3;
+}
+
+message CreateAccountResponse {
+    int32 status_code = 1;
+}
+
+// Message for logging into an account
+message LoginAccountRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message LoginAccountResponse {
+    int32 status_code = 1;
+    int32 count = 2;
+    repeated Message msg_lst = 3;
+}
+
+// Message for listing accounts
+message ListAccountRequest {
+    string pattern = 1;
+}
+
+message ListAccountResponse {
+    int32 status_code = 1;
+    repeated Account acct_lst = 2;
+}
+
+// Message for deleting an account
+message DeleteAccountRequest {
+    string username = 1;
+}
+
+message DeleteAccountResponse {
+    int32 status_code = 1;
+}
+
+// Message for fetching homepage
+message FetchHomepageRequest {
+    string username = 1;
+}
+
+message FetchHomepageResponse {
+    int32 status_code = 1;
+    int32 count = 2;
+    repeated Message msg_lst = 3;
+}
+
+// Message for fetching read messages
+message FetchMessagesReadRequest {
+    string username = 1;
+    int32 num = 2;
+}
+
+message FetchMessagesReadResponse {
+    int32 status_code = 1;
+    repeated Message msg_lst = 2;
+}
+
+// Message for fetching unread messages
+message FetchMessagesUnreadRequest {
+    string username = 1;
+    int32 num = 2;
+}
+
+message FetchMessagesUnreadResponse {
+    int32 status_code = 1;
+    int32 count = 2;
+    repeated Message msg_lst = 3;
+}
+
+// Message for deleting list of message ids
+message DeleteMessageRequest {
+    string username = 1;
+    repeated int32 message_id_lst = 2;
+}
+
+message DeleteMessageResponse {
+    int32 status_code = 1;
+    int32 count = 2;
+    repeated Message msg_lst = 3;
+}
+
+// Message for sending a message
+message SendMessageRequest {
+    string username = 1;
+    string receiver = 2;
+    string content = 3;
+}
+
+message SendMessageResponse {
+    int32 status_code = 1;
+}
+
+// Message for receiving a message
+message ReceiveMessageResponse {
+    repeated Message msg_lst = 1;
+}
+
+// Schema for a message sent between clients
+message Message {
+    int32 id = 1;
+    string sender = 2;
+    string receiver = 3;
+    string content = 4;
+    int64 timestamp = 5;
+    bool delivered = 6;
+}
+
+// Schema for a client account
+message Account {
+    int32 id = 1;
+    string username = 2;
+    string bio = 3;
+}

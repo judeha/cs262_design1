@@ -8,6 +8,7 @@ import ssl
 import logging
 from database import DatabaseHandler
 from utils import encode_protocol, decode_protocol, ResponseCode, OpCode
+import handler_pb2 as handler_pb2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
