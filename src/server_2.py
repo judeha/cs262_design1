@@ -104,9 +104,11 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         response = handler_pb2.ListAccountResponse()
         result = self.db.list_accounts(request.pattern)
 
+        result = self.db.list_accounts(pattern=request.pattern or "")
+
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
-            data = result["data"]
+
             response.acct_lst = data.pop(0)
         return response 
     
