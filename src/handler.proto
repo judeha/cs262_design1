@@ -4,6 +4,7 @@ import "google/protobuf/empty.proto";
 
 // gRPC service definition
 service Handler {
+    rpc Starting(google.protobuf.Empty) returns (StartingResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -15,6 +16,11 @@ service Handler {
     rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
     rpc ReceiveMessage(google.protobuf.Empty) returns (ReceiveMessageResponse);
+}
+
+// Message for Starting
+message StartingResponse {
+    int32 status_code = 1;
 }
 
 // Message for checking if an account exists

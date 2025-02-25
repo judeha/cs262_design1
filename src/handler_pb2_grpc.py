@@ -36,6 +36,11 @@ class HandlerStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.Starting = channel.unary_unary(
+                '/Handler/Starting',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=handler__pb2.StartingResponse.FromString,
+                _registered_method=True)
         self.CheckAccountExists = channel.unary_unary(
                 '/Handler/CheckAccountExists',
                 request_serializer=handler__pb2.AccountExistsRequest.SerializeToString,
@@ -96,6 +101,12 @@ class HandlerStub(object):
 class HandlerServicer(object):
     """gRPC service definition
     """
+
+    def Starting(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def CheckAccountExists(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -166,6 +177,11 @@ class HandlerServicer(object):
 
 def add_HandlerServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'Starting': grpc.unary_unary_rpc_method_handler(
+                    servicer.Starting,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=handler__pb2.StartingResponse.SerializeToString,
+            ),
             'CheckAccountExists': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckAccountExists,
                     request_deserializer=handler__pb2.AccountExistsRequest.FromString,
@@ -232,6 +248,33 @@ def add_HandlerServicer_to_server(servicer, server):
 class Handler(object):
     """gRPC service definition
     """
+
+    @staticmethod
+    def Starting(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Handler/Starting',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            handler__pb2.StartingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def CheckAccountExists(request,

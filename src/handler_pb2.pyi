@@ -6,6 +6,12 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class StartingResponse(_message.Message):
+    __slots__ = ("status_code",)
+    STATUS_CODE_FIELD_NUMBER: _ClassVar[int]
+    status_code: int
+    def __init__(self, status_code: _Optional[int] = ...) -> None: ...
+
 class AccountExistsRequest(_message.Message):
     __slots__ = ("username",)
     USERNAME_FIELD_NUMBER: _ClassVar[int]
