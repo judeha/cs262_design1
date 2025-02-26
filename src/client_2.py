@@ -43,10 +43,9 @@ MAX_VIEW = config["max_view"]
 # Background Thread: manages receiving messages
 # -----------------------------------------------------------------------------
 class GRPCClient:
-    def __init__(self, server_address):
+    def __init__(self, host, port):
         """Initialize the gRPC client and start a background thread for receiving messages."""
-        self.server_address = server_address
-        self.channel = grpc.insecure_channel(self.server_address)
+        self.channel = grpc.insecure_channel(f"{host}:{port}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
 
         # Queue for incoming messages (thread-safe)
@@ -57,16 +56,27 @@ class GRPCClient:
         self.receiver_thread = threading.Thread(target=self._receive_messages, daemon=True)
         self.receiver_thread.start()
 
-    def _receive_messages(self):
-        """Continuously listens for new messages from the server."""
-        try:
-            for response in self.stub.ReceiveMessage(google.protobuf.empty_pb2.Empty()): # TODO change input
-                if self.stop_event.is_set():
-                    break  # Stop thread if the event is triggered
+    # def _receive_messages(self):
+    #     """Continuously listens for new messages from the server."""
+    #     try:
+    #         for response in self.stub.ReceiveMessage(google.protobuf.empty_pb2.Empty()): # TODO change input
+    #             if self.stop_event.is_set():
+    #                 break  # Stop thread if the event is triggered
                 
-                # Add received messages to the queue
-                self.incoming_queue.put((response.sender, response.content))
+    #             # Add received messages to the queue
+    #             self.incoming_queue.put((response.sender, response.content))
 
+    #     except grpc.RpcError as e:
+    #         print(f"Stream closed with error: {e}")
+    def _receive_messages(self):
+        """Listens for new messages from the server."""
+        try:
+            request = handler_pb2.ReceiveMessageRequest(username="my_username")  # FIXED
+            for response in self.stub.ReceiveMessage(request):
+                if self.stop_event.is_set():
+                    break
+                for msg in response.msg_lst:
+                    self.incoming_queue.put((msg.sender, msg.content))
         except grpc.RpcError as e:
             print(f"Stream closed with error: {e}")
 
@@ -444,7 +454,11 @@ class ChatGUI:
         
         # Display in reverse order so newest messages are at the bottom
         for msg in self.messages:
-            msg_id, sender, receiver, content, timestamp, _ = msg
+            msg_id = msg.id
+            sender = msg.sender
+            receiver = msg.receiver
+            content = msg.content
+            timestamp = msg.timestamp
             timestamp = timestamp / 1_000_000
             readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
             message_text = f"{msg_id}: {sender} -> {receiver} @ {readable_time} | {content}\n\n"
@@ -458,7 +472,9 @@ class ChatGUI:
         self.accounts_display.config(state='normal')  # Enable editing temporarily
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
         for acc in self.accounts:
-            id, username, bio = acc
+            id = acc.id
+            username = acc.username
+            bio = acc.bio
             emoji_idx = random.randint(0, len(EMOJIS) - 1)
             text = f"{id}) {username} {EMOJIS[emoji_idx]} : {bio}\n\n"
             self.accounts_display.insert(tk.END, text)
@@ -467,18 +483,20 @@ class ChatGUI:
         self.accounts_display.see(tk.END)  # Auto-scroll to latest message
     
     def _on_check_username(self, username):
-        status_code, exists = self.grpc_client.check_account(username.get())
-        if exists:
-            self.display_error("Account already exists")
+        response = self.grpc_client.check_account(username.get())
+        if response.exists:
+            # self.display_error("Account already exists")
+            self.show_frame("login")
             return
         self.show_frame("create_account")
-
     def _on_create_account(self, username, password, bio):
         # Call the server to create an account
-        status_code = self.grpc_client.create_account(username.get(), self._hash_password(password.get()), bio.get())
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+        response = self.grpc_client.create_account(username.get(), self._hash_password(password.get()), bio.get())
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
+        # Clear the message field
+        username.delete(0, tk.END)
         self.show_frame("login")
 
     def _hash_password(self, password):
@@ -487,14 +505,19 @@ class ChatGUI:
 
     def _on_login_account(self, username, password):
         # Call the server to login
-        self.username = copy.deepcopy(username.get())        
-        status_code, count, messages = self.grpc_client.login(self.username, self._hash_password(password.get()))
-        if status_code != ResponseCode.SUCCESS.value:
+        self.username = copy.deepcopy(username.get()) 
+        self.password = copy.deepcopy(password.get())    
+        response = self.grpc_client.login(self.username, self._hash_password(password.get()))
+        if response.status_code != ResponseCode.SUCCESS.value:
             self.display_error("Invalid username or password")
             return
         
-        self.count = count
-        self.messages = messages
+        # Clear the message field
+        username.delete(0, tk.END)
+        password.delete(0, tk.END)
+        
+        self.count = response.count
+        self.messages = response.msg_lst
         self.show_frame("homepage")
 
         # Start receiving messages
@@ -502,9 +525,9 @@ class ChatGUI:
     
     def _on_delete_account(self, username, password):
         # Call the server to delete the account
-        status_code = self.grpc_client.delete_account(username, self._hash_password(password.get()))
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+        response = self.grpc_client.delete_account(username, self._hash_password(password))
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
         self.show_frame("main")
 
@@ -512,12 +535,12 @@ class ChatGUI:
         # Call the server to delete messages
         delete_msgs = delete_msgs.get().split(",")
         delete_msgs = [int(msg) for msg in delete_msgs]
-        status_code, count, msg_lst = self.grpc_client.delete_messages(username, delete_msgs)
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+        response = self.grpc_client.delete_messages(username, delete_msgs)
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
-        self.count = count
-        self.messages = msg_lst
+        self.count = response.count
+        self.messages = response.msg_lst
         self.show_frame("homepage")
 
     def _on_send_message(self, receiver, message):
@@ -530,32 +553,32 @@ class ChatGUI:
     def _on_list_accounts(self, list_acc_entry):
         # Call the server to list accounts
         if list_acc_entry.get() == "":
-            status_code, acct_lst = self.grpc_client.list_accounts()
+            response = self.grpc_client.list_accounts()
         else:
-            status_code, acct_lst = self.grpc_client.list_accounts(list_acc_entry.get())
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+            response = self.grpc_client.list_accounts(list_acc_entry.get())
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
-        self.accounts = acct_lst
+        self.accounts = response.acct_lst
         self.show_frame("list_accounts")
 
     def _on_fetch_unread_message(self, num_msgs):
         # Call the server to fetch unread messages
-        status_code, count, msg_lst = self.grpc_client.fetch_unread_messages(self.username, int(num_msgs.get()))
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+        response = self.grpc_client.fetch_unread_messages(self.username, int(num_msgs.get()))
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
-        self.count = count
-        self.messages = msg_lst
+        self.count = response.count
+        self.messages = response.msg_lst
         self.show_frame("homepage")
 
     def _on_fetch_read_message(self, num_msgs):
         # Call the server to fetch read messages
-        status_code, msg_lst = self.grpc_client.fetch_read_messages(self.username, int(num_msgs.get()))
-        if status_code != ResponseCode.SUCCESS.value:
-            self.display_error(RESPONSE_MESSAGES[status_code])
+        response = self.grpc_client.fetch_read_messages(self.username, int(num_msgs.get()))
+        if response.status_code != ResponseCode.SUCCESS.value:
+            self.display_error(RESPONSE_MESSAGES[response.status_code])
             return
-        self.messages = msg_lst
+        self.messages = response.msg_lst
         self.show_frame("homepage")
 # -----------------------------------------------------------------------------
 # Main Client Launcher

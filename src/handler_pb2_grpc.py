@@ -91,9 +91,9 @@ class HandlerStub(object):
                 request_serializer=handler__pb2.SendMessageRequest.SerializeToString,
                 response_deserializer=handler__pb2.SendMessageResponse.FromString,
                 _registered_method=True)
-        self.ReceiveMessage = channel.stream_stream(
+        self.ReceiveMessage = channel.unary_stream(
                 '/Handler/ReceiveMessage',
-                request_serializer=handler__pb2.ReceiveMessageResponse.SerializeToString,
+                request_serializer=handler__pb2.ReceiveMessageRequest.SerializeToString,
                 response_deserializer=handler__pb2.ReceiveMessageResponse.FromString,
                 _registered_method=True)
 
@@ -168,7 +168,7 @@ class HandlerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReceiveMessage(self, request_iterator, context):
+    def ReceiveMessage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -232,9 +232,9 @@ def add_HandlerServicer_to_server(servicer, server):
                     request_deserializer=handler__pb2.SendMessageRequest.FromString,
                     response_serializer=handler__pb2.SendMessageResponse.SerializeToString,
             ),
-            'ReceiveMessage': grpc.stream_stream_rpc_method_handler(
+            'ReceiveMessage': grpc.unary_stream_rpc_method_handler(
                     servicer.ReceiveMessage,
-                    request_deserializer=handler__pb2.ReceiveMessageResponse.FromString,
+                    request_deserializer=handler__pb2.ReceiveMessageRequest.FromString,
                     response_serializer=handler__pb2.ReceiveMessageResponse.SerializeToString,
             ),
     }
@@ -547,7 +547,7 @@ class Handler(object):
             _registered_method=True)
 
     @staticmethod
-    def ReceiveMessage(request_iterator,
+    def ReceiveMessage(request,
             target,
             options=(),
             channel_credentials=None,
@@ -557,11 +557,11 @@ class Handler(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.stream_stream(
-            request_iterator,
+        return grpc.experimental.unary_stream(
+            request,
             target,
             '/Handler/ReceiveMessage',
-            handler__pb2.ReceiveMessageResponse.SerializeToString,
+            handler__pb2.ReceiveMessageRequest.SerializeToString,
             handler__pb2.ReceiveMessageResponse.FromString,
             options,
             channel_credentials,

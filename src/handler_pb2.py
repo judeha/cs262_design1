@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rhandler.proto\x1a\x1bgoogle/protobuf/empty.proto\"\'\n\x10StartingResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"(\n\x14\x41\x63\x63ountExistsRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"<\n\x15\x41\x63\x63ountExistsResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x0e\n\x06\x65xists\x18\x02 \x01(\x08\"G\n\x14\x43reateAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x0b\n\x03\x62io\x18\x03 \x01(\t\",\n\x15\x43reateAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"9\n\x13LoginAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"U\n\x14LoginAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"%\n\x12ListAccountRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"F\n\x13ListAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x1a\n\x08\x61\x63\x63t_lst\x18\x02 \x03(\x0b\x32\x08.Account\"(\n\x14\x44\x65leteAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\",\n\x15\x44\x65leteAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"(\n\x14\x46\x65tchHomepageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"V\n\x15\x46\x65tchHomepageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"9\n\x18\x46\x65tchMessagesReadRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0b\n\x03num\x18\x02 \x01(\x05\"K\n\x19\x46\x65tchMessagesReadResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x19\n\x07msg_lst\x18\x02 \x03(\x0b\x32\x08.Message\";\n\x1a\x46\x65tchMessagesUnreadRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0b\n\x03num\x18\x02 \x01(\x05\"\\\n\x1b\x46\x65tchMessagesUnreadResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"@\n\x14\x44\x65leteMessageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x16\n\x0emessage_id_lst\x18\x02 \x03(\x05\"V\n\x15\x44\x65leteMessageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"I\n\x12SendMessageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08receiver\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\"*\n\x13SendMessageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"3\n\x16ReceiveMessageResponse\x12\x19\n\x07msg_lst\x18\x01 \x03(\x0b\x32\x08.Message\"n\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0e\n\x06sender\x18\x02 \x01(\t\x12\x10\n\x08receiver\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x11\n\tdelivered\x18\x06 \x01(\x08\"4\n\x07\x41\x63\x63ount\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x10\n\x08username\x18\x02 \x01(\t\x12\x0b\n\x03\x62io\x18\x03 \x01(\t2\x9a\x06\n\x07Handler\x12\x35\n\x08Starting\x12\x16.google.protobuf.Empty\x1a\x11.StartingResponse\x12\x43\n\x12\x43heckAccountExists\x12\x15.AccountExistsRequest\x1a\x16.AccountExistsResponse\x12>\n\rCreateAccount\x12\x15.CreateAccountRequest\x1a\x16.CreateAccountResponse\x12;\n\x0cLoginAccount\x12\x14.LoginAccountRequest\x1a\x15.LoginAccountResponse\x12\x38\n\x0bListAccount\x12\x13.ListAccountRequest\x1a\x14.ListAccountResponse\x12>\n\rDeleteAccount\x12\x15.DeleteAccountRequest\x1a\x16.DeleteAccountResponse\x12>\n\rFetchHomepage\x12\x15.FetchHomepageRequest\x1a\x16.FetchHomepageResponse\x12O\n\x12\x46\x65tchMessageUnread\x12\x1b.FetchMessagesUnreadRequest\x1a\x1c.FetchMessagesUnreadResponse\x12I\n\x10\x46\x65tchMessageRead\x12\x19.FetchMessagesReadRequest\x1a\x1a.FetchMessagesReadResponse\x12>\n\rDeleteMessage\x12\x15.DeleteMessageRequest\x1a\x16.DeleteMessageResponse\x12\x38\n\x0bSendMessage\x12\x13.SendMessageRequest\x1a\x14.SendMessageResponse\x12\x46\n\x0eReceiveMessage\x12\x17.ReceiveMessageResponse\x1a\x17.ReceiveMessageResponse(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rhandler.proto\x1a\x1bgoogle/protobuf/empty.proto\"\'\n\x10StartingResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"(\n\x14\x41\x63\x63ountExistsRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"<\n\x15\x41\x63\x63ountExistsResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x0e\n\x06\x65xists\x18\x02 \x01(\x08\"G\n\x14\x43reateAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x0b\n\x03\x62io\x18\x03 \x01(\t\",\n\x15\x43reateAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"9\n\x13LoginAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"U\n\x14LoginAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"%\n\x12ListAccountRequest\x12\x0f\n\x07pattern\x18\x01 \x01(\t\"F\n\x13ListAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x1a\n\x08\x61\x63\x63t_lst\x18\x02 \x03(\x0b\x32\x08.Account\":\n\x14\x44\x65leteAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\",\n\x15\x44\x65leteAccountResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\"(\n\x14\x46\x65tchHomepageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"V\n\x15\x46\x65tchHomepageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"9\n\x18\x46\x65tchMessagesReadRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0b\n\x03num\x18\x02 \x01(\x05\"K\n\x19\x46\x65tchMessagesReadResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\x19\n\x07msg_lst\x18\x02 \x03(\x0b\x32\x08.Message\";\n\x1a\x46\x65tchMessagesUnreadRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x0b\n\x03num\x18\x02 \x01(\x05\"\\\n\x1b\x46\x65tchMessagesUnreadResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"@\n\x14\x44\x65leteMessageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x16\n\x0emessage_id_lst\x18\x02 \x03(\x05\"V\n\x15\x44\x65leteMessageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\x12\r\n\x05\x63ount\x18\x02 \x01(\x05\x12\x19\n\x07msg_lst\x18\x03 \x03(\x0b\x32\x08.Message\"I\n\x12SendMessageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08receiver\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\"*\n\x13SendMessageResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\x05\")\n\x15ReceiveMessageRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"3\n\x16ReceiveMessageResponse\x12\x19\n\x07msg_lst\x18\x01 \x03(\x0b\x32\x08.Message\"n\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0e\n\x06sender\x18\x02 \x01(\t\x12\x10\n\x08receiver\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x11\n\tdelivered\x18\x06 \x01(\x08\"4\n\x07\x41\x63\x63ount\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x10\n\x08username\x18\x02 \x01(\t\x12\x0b\n\x03\x62io\x18\x03 \x01(\t2\x97\x06\n\x07Handler\x12\x35\n\x08Starting\x12\x16.google.protobuf.Empty\x1a\x11.StartingResponse\x12\x43\n\x12\x43heckAccountExists\x12\x15.AccountExistsRequest\x1a\x16.AccountExistsResponse\x12>\n\rCreateAccount\x12\x15.CreateAccountRequest\x1a\x16.CreateAccountResponse\x12;\n\x0cLoginAccount\x12\x14.LoginAccountRequest\x1a\x15.LoginAccountResponse\x12\x38\n\x0bListAccount\x12\x13.ListAccountRequest\x1a\x14.ListAccountResponse\x12>\n\rDeleteAccount\x12\x15.DeleteAccountRequest\x1a\x16.DeleteAccountResponse\x12>\n\rFetchHomepage\x12\x15.FetchHomepageRequest\x1a\x16.FetchHomepageResponse\x12O\n\x12\x46\x65tchMessageUnread\x12\x1b.FetchMessagesUnreadRequest\x1a\x1c.FetchMessagesUnreadResponse\x12I\n\x10\x46\x65tchMessageRead\x12\x19.FetchMessagesReadRequest\x1a\x1a.FetchMessagesReadResponse\x12>\n\rDeleteMessage\x12\x15.DeleteMessageRequest\x1a\x16.DeleteMessageResponse\x12\x38\n\x0bSendMessage\x12\x13.SendMessageRequest\x1a\x14.SendMessageResponse\x12\x43\n\x0eReceiveMessage\x12\x16.ReceiveMessageRequest\x1a\x17.ReceiveMessageResponse0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -51,35 +51,37 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_LISTACCOUNTRESPONSE']._serialized_start=495
   _globals['_LISTACCOUNTRESPONSE']._serialized_end=565
   _globals['_DELETEACCOUNTREQUEST']._serialized_start=567
-  _globals['_DELETEACCOUNTREQUEST']._serialized_end=607
-  _globals['_DELETEACCOUNTRESPONSE']._serialized_start=609
-  _globals['_DELETEACCOUNTRESPONSE']._serialized_end=653
-  _globals['_FETCHHOMEPAGEREQUEST']._serialized_start=655
-  _globals['_FETCHHOMEPAGEREQUEST']._serialized_end=695
-  _globals['_FETCHHOMEPAGERESPONSE']._serialized_start=697
-  _globals['_FETCHHOMEPAGERESPONSE']._serialized_end=783
-  _globals['_FETCHMESSAGESREADREQUEST']._serialized_start=785
-  _globals['_FETCHMESSAGESREADREQUEST']._serialized_end=842
-  _globals['_FETCHMESSAGESREADRESPONSE']._serialized_start=844
-  _globals['_FETCHMESSAGESREADRESPONSE']._serialized_end=919
-  _globals['_FETCHMESSAGESUNREADREQUEST']._serialized_start=921
-  _globals['_FETCHMESSAGESUNREADREQUEST']._serialized_end=980
-  _globals['_FETCHMESSAGESUNREADRESPONSE']._serialized_start=982
-  _globals['_FETCHMESSAGESUNREADRESPONSE']._serialized_end=1074
-  _globals['_DELETEMESSAGEREQUEST']._serialized_start=1076
-  _globals['_DELETEMESSAGEREQUEST']._serialized_end=1140
-  _globals['_DELETEMESSAGERESPONSE']._serialized_start=1142
-  _globals['_DELETEMESSAGERESPONSE']._serialized_end=1228
-  _globals['_SENDMESSAGEREQUEST']._serialized_start=1230
-  _globals['_SENDMESSAGEREQUEST']._serialized_end=1303
-  _globals['_SENDMESSAGERESPONSE']._serialized_start=1305
-  _globals['_SENDMESSAGERESPONSE']._serialized_end=1347
-  _globals['_RECEIVEMESSAGERESPONSE']._serialized_start=1349
-  _globals['_RECEIVEMESSAGERESPONSE']._serialized_end=1400
-  _globals['_MESSAGE']._serialized_start=1402
-  _globals['_MESSAGE']._serialized_end=1512
-  _globals['_ACCOUNT']._serialized_start=1514
-  _globals['_ACCOUNT']._serialized_end=1566
-  _globals['_HANDLER']._serialized_start=1569
-  _globals['_HANDLER']._serialized_end=2363
+  _globals['_DELETEACCOUNTREQUEST']._serialized_end=625
+  _globals['_DELETEACCOUNTRESPONSE']._serialized_start=627
+  _globals['_DELETEACCOUNTRESPONSE']._serialized_end=671
+  _globals['_FETCHHOMEPAGEREQUEST']._serialized_start=673
+  _globals['_FETCHHOMEPAGEREQUEST']._serialized_end=713
+  _globals['_FETCHHOMEPAGERESPONSE']._serialized_start=715
+  _globals['_FETCHHOMEPAGERESPONSE']._serialized_end=801
+  _globals['_FETCHMESSAGESREADREQUEST']._serialized_start=803
+  _globals['_FETCHMESSAGESREADREQUEST']._serialized_end=860
+  _globals['_FETCHMESSAGESREADRESPONSE']._serialized_start=862
+  _globals['_FETCHMESSAGESREADRESPONSE']._serialized_end=937
+  _globals['_FETCHMESSAGESUNREADREQUEST']._serialized_start=939
+  _globals['_FETCHMESSAGESUNREADREQUEST']._serialized_end=998
+  _globals['_FETCHMESSAGESUNREADRESPONSE']._serialized_start=1000
+  _globals['_FETCHMESSAGESUNREADRESPONSE']._serialized_end=1092
+  _globals['_DELETEMESSAGEREQUEST']._serialized_start=1094
+  _globals['_DELETEMESSAGEREQUEST']._serialized_end=1158
+  _globals['_DELETEMESSAGERESPONSE']._serialized_start=1160
+  _globals['_DELETEMESSAGERESPONSE']._serialized_end=1246
+  _globals['_SENDMESSAGEREQUEST']._serialized_start=1248
+  _globals['_SENDMESSAGEREQUEST']._serialized_end=1321
+  _globals['_SENDMESSAGERESPONSE']._serialized_start=1323
+  _globals['_SENDMESSAGERESPONSE']._serialized_end=1365
+  _globals['_RECEIVEMESSAGEREQUEST']._serialized_start=1367
+  _globals['_RECEIVEMESSAGEREQUEST']._serialized_end=1408
+  _globals['_RECEIVEMESSAGERESPONSE']._serialized_start=1410
+  _globals['_RECEIVEMESSAGERESPONSE']._serialized_end=1461
+  _globals['_MESSAGE']._serialized_start=1463
+  _globals['_MESSAGE']._serialized_end=1573
+  _globals['_ACCOUNT']._serialized_start=1575
+  _globals['_ACCOUNT']._serialized_end=1627
+  _globals['_HANDLER']._serialized_start=1630
+  _globals['_HANDLER']._serialized_end=2421
 # @@protoc_insertion_point(module_scope)

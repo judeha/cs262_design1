@@ -75,10 +75,12 @@ class ListAccountResponse(_message.Message):
     def __init__(self, status_code: _Optional[int] = ..., acct_lst: _Optional[_Iterable[_Union[Account, _Mapping]]] = ...) -> None: ...
 
 class DeleteAccountRequest(_message.Message):
-    __slots__ = ("username",)
+    __slots__ = ("username", "password")
     USERNAME_FIELD_NUMBER: _ClassVar[int]
+    PASSWORD_FIELD_NUMBER: _ClassVar[int]
     username: str
-    def __init__(self, username: _Optional[str] = ...) -> None: ...
+    password: str
+    def __init__(self, username: _Optional[str] = ..., password: _Optional[str] = ...) -> None: ...
 
 class DeleteAccountResponse(_message.Message):
     __slots__ = ("status_code",)
@@ -169,6 +171,12 @@ class SendMessageResponse(_message.Message):
     STATUS_CODE_FIELD_NUMBER: _ClassVar[int]
     status_code: int
     def __init__(self, status_code: _Optional[int] = ...) -> None: ...
+
+class ReceiveMessageRequest(_message.Message):
+    __slots__ = ("username",)
+    USERNAME_FIELD_NUMBER: _ClassVar[int]
+    username: str
+    def __init__(self, username: _Optional[str] = ...) -> None: ...
 
 class ReceiveMessageResponse(_message.Message):
     __slots__ = ("msg_lst",)
