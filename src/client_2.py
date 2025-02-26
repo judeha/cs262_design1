@@ -48,47 +48,58 @@ class GRPCClient:
         self.channel = grpc.insecure_channel(f"{host}:{port}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
 
+        self.username = None
+
         # Queue for incoming messages (thread-safe)
         self.incoming_queue = queue.Queue()
 
         # Start the background thread for receiving messages
         self.stop_event = threading.Event()
+        # Start background thread for receiving messages
+        # self.receiver_thread = threading.Thread(target=self._receive_messages, daemon=True)
+        # self.receiver_thread.start()
+        self.receiver_thread = None
+
+
+    def _start_stream(self):
+        if self.receiver_thread is not None:
+            return
         self.receiver_thread = threading.Thread(target=self._receive_messages, daemon=True)
         self.receiver_thread.start()
 
-    # def _receive_messages(self):
-    #     """Continuously listens for new messages from the server."""
-    #     try:
-    #         for response in self.stub.ReceiveMessage(google.protobuf.empty_pb2.Empty()): # TODO change input
-    #             if self.stop_event.is_set():
-    #                 break  # Stop thread if the event is triggered
-                
-    #             # Add received messages to the queue
-    #             self.incoming_queue.put((response.sender, response.content))
-
-    #     except grpc.RpcError as e:
-    #         print(f"Stream closed with error: {e}")
     def _receive_messages(self):
-        """Listens for new messages from the server."""
+        """Continuously read streaming responses from server."""
+        if not self.username:
+            return
         try:
-            request = handler_pb2.ReceiveMessageRequest(username="my_username")  # FIXED
+            request = handler_pb2.ReceiveMessageRequest(username=self.username)
             for response in self.stub.ReceiveMessage(request):
-                if self.stop_event.is_set():
-                    break
+                # each response is a ReceiveMessageResponse with repeated msg_lst
                 for msg in response.msg_lst:
-                    self.incoming_queue.put((msg.sender, msg.content))
+                    self.incoming_queue.put(msg)
         except grpc.RpcError as e:
-            print(f"Stream closed with error: {e}")
+            return
+        
+    def send_message(self, receiver, content):
+        """Send a message (unary call)."""
+        if not self.username:
+            return
+        req = handler_pb2.SendMessageRequest(sender=self.username, receiver=receiver, content=content)
+        resp = self.stub.SendMessage(req)
+        return resp
 
-    def get_incoming_messages(self):
-        """Retrieve messages from the queue in a non-blocking way."""
+    def get_new_messages(self):
+        """Retrieve any messages from the local queue."""
         messages = []
         while not self.incoming_queue.empty():
-            messages.append(self.incoming_queue.get())
+            m = self.incoming_queue.get()
+            if isinstance(m, handler_pb2.Message):
+                messages.append(m)
         return messages
 
     def stop(self):
         """Gracefully stop the client and close the connection."""
+        _ = self.stub.Ending(handler_pb2.EndingRequest(username=self.username))
         self.stop_event.set()
         self.channel.close()
     
@@ -100,9 +111,20 @@ class GRPCClient:
         """Create a new account."""
         return self.stub.CreateAccount(handler_pb2.CreateAccountRequest(username=username, password=password, bio=bio))
     
+    # def login(self, username, password):
+    #     """Login to an existing account."""
+    #     return self.stub.LoginAccount(handler_pb2.LoginAccountRequest(username=username, password=password))
     def login(self, username, password):
-        """Login to an existing account."""
-        return self.stub.LoginAccount(handler_pb2.LoginAccountRequest(username=username, password=password))
+        """Login to the server, creates a queue on the server side."""
+        self.username = username
+        req = handler_pb2.LoginAccountRequest(username=username, password=password)
+        resp = self.stub.LoginAccount(req)
+        # store any initial messages
+        for msg in resp.msg_lst:
+            self.incoming_queue.put((msg.sender, msg.content))
+        # start streaming thread
+        self._start_stream()
+        return resp
     
     def delete_account(self, username, password):
         """Delete an existing account."""
@@ -114,7 +136,7 @@ class GRPCClient:
     
     def delete_messages(self, username, msg_ids):
         """Delete messages by ID."""
-        return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, msg_ids=msg_ids))
+        return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, message_id_lst=msg_ids))
     
     def send_message(self, sender, receiver, content):
         """Send a message to a recipient."""
@@ -122,11 +144,11 @@ class GRPCClient:
     
     def fetch_unread_messages(self, username, num_msgs):
         """Fetch unread messages."""
-        return self.stub.FetchMessagesUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num_msgs=num_msgs))
+        return self.stub.FetchMessageUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num=num_msgs))
     
     def fetch_read_messages(self, username, num_msgs):
         """Fetch read messages."""
-        return self.stub.FetchMessagesRead(handler_pb2.FetchMessagesReadRequest(username=username, num_msgs=num_msgs))
+        return self.stub.FetchMessageRead(handler_pb2.FetchMessagesReadRequest(username=username, num=num_msgs))
     
     def fetch_homepage(self, username):
         """Fetch the homepage."""
@@ -172,23 +194,17 @@ class ChatGUI:
 
         # Periodically poll the incoming queue
         self.poll_incoming()
-
+    
     def poll_incoming(self):
-        """
-        Check the thread-safe queue for incoming server responses
-        and update the chat display accordingly.
-        """
-        while not self.grpc_client.incoming_queue.empty():
-            response = self.grpc_client.incoming_queue.get()
-            # If receiving message, update messages and stay on homepage
-            if isinstance(response, handler_pb2.ReceiveMessageResponse):
-                self.messages += response.msg_lst
-                if len(self.messages) > MAX_VIEW:
-                    self.messages.pop(0)
-                self.show_frame("homepage")
+        """Check for new messages in local queue."""
+        new_msgs = self.grpc_client.get_new_messages()
+        self.messages.extend(new_msgs)
+        if len(new_msgs) > MAX_VIEW:
+            self.messages = self.messages[-MAX_VIEW:]
+        self.display_messages()
 
         # Schedule next poll
-        self.root.after(2, self.poll_incoming) # TODO: put in config
+        self.root.after(500, self.poll_incoming) # TODO: put in config
     
     def setup_main_frame(self):
         """Set up the main frame with a simple welcome message."""        
@@ -450,7 +466,7 @@ class ChatGUI:
 
         self.chat_display.insert(tk.END, f"Unread messages: {self.count}\n\n")
 
-        self.messages.sort(key=lambda x: x[4], reverse=False)
+        self.messages.sort(key=lambda x: x.timestamp, reverse=False)
         
         # Display in reverse order so newest messages are at the bottom
         for msg in self.messages:
@@ -489,6 +505,7 @@ class ChatGUI:
             self.show_frame("login")
             return
         self.show_frame("create_account")
+
     def _on_create_account(self, username, password, bio):
         # Call the server to create an account
         response = self.grpc_client.create_account(username.get(), self._hash_password(password.get()), bio.get())
@@ -512,6 +529,10 @@ class ChatGUI:
             self.display_error("Invalid username or password")
             return
         
+        self.grpc_client.username = self.username
+        self.poll_incoming()
+        self.display_error("")
+        
         # Clear the message field
         username.delete(0, tk.END)
         password.delete(0, tk.END)
@@ -519,9 +540,6 @@ class ChatGUI:
         self.count = response.count
         self.messages = response.msg_lst
         self.show_frame("homepage")
-
-        # Start receiving messages
-        threading.Thread(target=self.grpc_client.receive_messages, args=(self.username, self.display_messages), daemon=True).start()
     
     def _on_delete_account(self, username, password):
         # Call the server to delete the account

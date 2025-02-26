@@ -6,7 +6,13 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-class StartingResponse(_message.Message):
+class EndingRequest(_message.Message):
+    __slots__ = ("username",)
+    USERNAME_FIELD_NUMBER: _ClassVar[int]
+    username: str
+    def __init__(self, username: _Optional[str] = ...) -> None: ...
+
+class EndingResponse(_message.Message):
     __slots__ = ("status_code",)
     STATUS_CODE_FIELD_NUMBER: _ClassVar[int]
     status_code: int
@@ -157,14 +163,14 @@ class DeleteMessageResponse(_message.Message):
     def __init__(self, status_code: _Optional[int] = ..., count: _Optional[int] = ..., msg_lst: _Optional[_Iterable[_Union[Message, _Mapping]]] = ...) -> None: ...
 
 class SendMessageRequest(_message.Message):
-    __slots__ = ("username", "receiver", "content")
-    USERNAME_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("sender", "receiver", "content")
+    SENDER_FIELD_NUMBER: _ClassVar[int]
     RECEIVER_FIELD_NUMBER: _ClassVar[int]
     CONTENT_FIELD_NUMBER: _ClassVar[int]
-    username: str
+    sender: str
     receiver: str
     content: str
-    def __init__(self, username: _Optional[str] = ..., receiver: _Optional[str] = ..., content: _Optional[str] = ...) -> None: ...
+    def __init__(self, sender: _Optional[str] = ..., receiver: _Optional[str] = ..., content: _Optional[str] = ...) -> None: ...
 
 class SendMessageResponse(_message.Message):
     __slots__ = ("status_code",)

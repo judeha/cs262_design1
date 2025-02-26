@@ -1,10 +1,8 @@
 syntax = "proto3";
 
-import "google/protobuf/empty.proto";
-
 // gRPC service definition
 service Handler {
-    rpc Starting(google.protobuf.Empty) returns (StartingResponse);
+    rpc Ending(EndingRequest) returns (EndingResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -18,8 +16,11 @@ service Handler {
     rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse);
 }
 
-// Message for Starting
-message StartingResponse {
+// Message for Ending
+message EndingRequest {
+    string username = 1;
+}
+message EndingResponse {
     int32 status_code = 1;
 }
 
@@ -124,7 +125,7 @@ message DeleteMessageResponse {
 
 // Message for sending a message
 message SendMessageRequest {
-    string username = 1;
+    string sender = 1;
     string receiver = 2;
     string content = 3;
 }

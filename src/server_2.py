@@ -2,7 +2,9 @@ import selectors
 import socket
 import traceback
 import yaml
+import queue
 import os
+import threading
 import server_handler
 from utils import database_setup
 
@@ -34,6 +36,7 @@ DB_PATH = config.get("db_path", "server.db")
 
 # Active clients mapping (username -> socket)
 active_clients = {}
+lock = threading.Lock()
 
 # Initialize the selector and database
 sel = selectors.DefaultSelector()
@@ -54,10 +57,10 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     """
     Handles standard communication between the server and a client using JSON encoding. Message is (fuzzily) equivalent to a server-stub.
     """
-    def __init__(self, active_clients={}):
+    def __init__(self):
         # self.db = DatabaseHandler(DB_PATH)
         # Active clients mapping (username -> Message object)
-        self.active_clients = active_clients
+        global active_clients
 
         # logging.info(f"New connection established: {addr}")
 
@@ -102,7 +105,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
             # Add the client to the active clients mapping
-            self.active_clients[request.username] = {"context": context, "messages": []}
+            with lock:
+                active_clients[request.username] = queue.Queue()
         return response
         
     def ListAccount(self, request, context):
@@ -193,7 +197,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         receiver = request.receiver
         msg_content = request.content
         timestamp = round(time.time())
-        delivered = receiver in self.active_clients
+        with lock:
+            delivered = receiver in active_clients
 
         # Insert the message into the database
         result = db.insert_message(sender, receiver, msg_content, timestamp, delivered)
@@ -214,8 +219,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                     delivered=delivered
                 )
                 # Send the message to the receiver
-                # self.active_clients[receiver]["messages"].append(msg)
-                self.active_clients[receiver]["message_queue"].put(msg)
+                with lock:
+                    active_clients[receiver].put(msg)
 
             except Exception as e:
                 print("Error sending message:", e)
@@ -225,23 +230,40 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     def ReceiveMessage(self, request, context):
         """Continuously stream new messages to the client."""
         username = request.username
+        with lock:
+            if username not in active_clients:
+                print(active_clients)
+                return
 
-        if username not in self.active_clients:
-            return
+            user_queue = active_clients[username]
 
         while True:
             try:
-                msg = self.active_clients[username]["message_queue"].get(timeout=30)
-                yield handler_pb2.ReceiveMessageResponse(msg_lst=[msg])
-            except self.active_clients[username]["message_queue"].Empty:
-                break
- 
+                # block for up to 30s waiting for a new message
+                msg = user_queue.get(timeout=30)
+                response = handler_pb2.ReceiveMessageResponse()
+                response.msg_lst.append(msg)
+                yield response
+
+            except queue.Empty:
+                # no messages arrived in 30s, keep waiting
+                continue
+
+    def Ending(self, request, context):
+        """Removes a client from active_clients."""
+        username = request.username
+        with lock:
+            if username in active_clients:
+                del active_clients[username]
+                response = handler_pb2.EndingResponse()
+                response.status_code = ResponseCode.SUCCESS.value
+                return response
+
 def serve(host, port):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     handler_pb2_grpc.add_HandlerServicer_to_server(HandlerService(), server)
     server.add_insecure_port(f'{host}:{port}')
     server.start()
-    print(f"Server listening on {host}:{port}")
     server.wait_for_termination()
 
 if __name__ == "__main__":
