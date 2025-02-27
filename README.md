@@ -21,8 +21,18 @@ In this design excercise, we built a simple, client-server chat application that
 uv sync
 source .venv/bin/activate
 ```
-3. On Command Line Interface (CLI) run ```python server.py``` with optional args ```--host <HOST> --port <PORT> --protocol <PROTOCOL>```. Default settings are 127.0.0.1, 65432, and 0. The 0 flag indicates a JSON protocol, and the 1 flag indicates a custom protocol. To host on multiple machines, get your IP address by running ```ipconfig getifaddr en0```.
-4. Open a new CLI window and run ```python client_gui.py --host --port --protocol```. 
+3. In terminal:
+To run gRPC: run
+```python server_grpc.py```
+To run our custom or JSON protocol: run
+```python server.py --host <HOST> --port <PORT> --protocol <PROTOCOL>```
+Default settings are 127.0.0.1, 65432, and 0. The 0 flag indicates a JSON protocol, and the 1 flag indicates a custom protocol. To host on multiple machines, get your IP address by running
+```ipconfig getifaddr en0```
+4. In new terminal:
+To run gRPC: run
+```python client_grpc.py```
+To run our custom or JSON protocol: run
+ ```python client_gui.py --host --port --protocol```.
 
 
 ### System Design 
