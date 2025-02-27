@@ -11,7 +11,6 @@ from utils import ResponseCode
 import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
-
 import grpc
 
 # Load configuration from YAML file
@@ -30,8 +29,7 @@ active_clients = {}
 lock = threading.Lock()
 
 # Initialize the selector and database
-sel = selectors.DefaultSelector()
-# database_setup(DB_PATH)
+database_setup(DB_PATH)
     
 # Load configuration
 yaml_path = "config.yaml"
@@ -61,7 +59,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def Starting(self, request, context):
         response = handler_pb2.StartingResponse()
-        response.status_code = ResponseCode.SUCCESS.value
+        response.status_code = ResponseCode.SUCCESS.valuef
         return response
     
     def CheckAccountExists(self, request, context):
@@ -102,6 +100,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             # Add the client to the active clients mapping
             with lock:
                 active_clients[request.username] = queue.Queue()
+        
         return response
         
     def ListAccount(self, request, context):
@@ -116,6 +115,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = result["data"]
             data = [handler_pb2.Account(id=acct[0], username=acct[1], bio=acct[2]) for acct in data]
             response.acct_lst.extend(data)
+
         return response 
     
     def DeleteAccount(self, request, context):
@@ -124,6 +124,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         result = db.delete_account(request.username, request.password)
         # Package the response
         response.status_code = result["status_code"]
+
         return response
 
     def FetchHomepage(self, request, context):
@@ -138,6 +139,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+
         return response 
 
     def FetchMessageRead(self, request, context):
@@ -151,6 +153,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+
         return response 
 
     def FetchMessageUnread(self, request, context):
@@ -182,6 +185,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+    
         return response
     
     def SendMessage(self, request, context):
@@ -219,7 +223,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
             except Exception as e:
                 print("Error sending message:", e)
-            
+
         return response
     
     def ReceiveMessage(self, request, context):
