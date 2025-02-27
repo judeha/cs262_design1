@@ -21,19 +21,8 @@ In this design excercise, we built a simple, client-server chat application that
 uv sync
 source .venv/bin/activate
 ```
-3. In terminal:
-To run gRPC: run
-```python server_grpc.py```
-To run our custom or JSON protocol: run
-```python server.py --host <HOST> --port <PORT> --protocol <PROTOCOL>```
-Default settings are 127.0.0.1, 65432, and 0. The 0 flag indicates a JSON protocol, and the 1 flag indicates a custom protocol. To host on multiple machines, get your IP address by running
-```ipconfig getifaddr en0```
-4. In new terminal:
-To run gRPC: run
-```python client_grpc.py```
-To run our custom or JSON protocol: run
- ```python client_gui.py --host --port --protocol```.
-
+3. In terminal: To run gRPC: run ```python server_grpc.py```. To run our custom or JSON protocol: run ```python server.py --host <HOST> --port <PORT> --protocol <PROTOCOL>``` Default settings are 127.0.0.1, 65432, and 0. The 0 flag indicates a JSON protocol, and the 1 flag indicates a custom protocol. To host on multiple machines, get your IP address by running ```ipconfig getifaddr en0```
+4. In new terminal: To run gRPC: run ```python client_grpc.py``` To run our custom or JSON protocol: run ```python client_gui.py --host --port --protocol```
 
 ### System Design 
 **Stack**
@@ -41,14 +30,27 @@ To run our custom or JSON protocol: run
 - Frontend: Tkinter 
 
 **File Structure:**
+- client_grpc.py: contains the client interface and logic for gRPC
+- server_grpc.py: contains the gRPC server
+- database.py: contains database actions
+- utils.py: contains status code mappings, database setup function, and custom protocol functions
+- config.yaml: contains default configurations for client display and server actions
+
+gRPC specific files
+- handler.proto: defines the gRPC service interface and the message schemas
+- handler_pb2.py: auto-generated from handler.proto. contains Python classes for each message, serialization logic, and type constraints
+- handler_pb2.pyi: optional type stub file that provides type hints for handler_pb2.py
+- handler_pb2_grpc.py: auto-generated from handler.proto. contains stub classes and server classes
+
+Custom and JSON protocol files
 - client_gui.py: contains class definition for the GUI and starts the connection to client
+- client_handler.py: client stub that handles sending requests and processing requests from the server on the client side.
 - server.py: starts the connection to server
-- database.py: contains all relevant queries to the database
-- database_setup.py: initializes the database
-- client_handler.py: handles sending requests and processing requests from the server on the client side.
-- server_handler.py: handles processing requests from and sending responses to the client.
-- codes.py: classifications for each request type 
-- utils.py: contains functions for password hashing and using the custom protocol. 
+- server_handler.py: server stub that handles processing requests from and sending responses to the client.
+
+Test files
+- check_grpc_sizes.py: measures size of data with gRPC
+- check_json_custom_sizes.py: measures size of data with JSON and custom protocols
 
 **Protocols** 
   
