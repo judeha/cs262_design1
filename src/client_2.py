@@ -27,6 +27,7 @@ yaml_path = "config.yaml"
 with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 
+
 # Defaults
 BG_COLOR = config['bg_color']
 BTN_TXT_COLOR = config['btn_txt_color']
@@ -475,7 +476,7 @@ class ChatGUI:
             receiver = msg.receiver
             content = msg.content
             timestamp = msg.timestamp
-            timestamp = timestamp / 1_000_000
+            # timestamp = timestamp / 1_000_000
             readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
             message_text = f"{msg_id}: {sender} -> {receiver} @ {readable_time} | {content}\n\n"
             self.chat_display.insert(tk.END, message_text)
@@ -488,7 +489,10 @@ class ChatGUI:
         self.accounts_display.config(state='normal')  # Enable editing temporarily
         self.accounts_display.delete(1.0, tk.END)  # Clear old accounts
         for acc in self.accounts:
-            id, username, bio = acc
+            id = acc.id
+            username = acc.username
+            bio = acc.bio
+            # id, username, bio = acc
             emoji_idx = random.randint(0, len(EMOJIS) - 1)
             text = f"{id}) {username} {EMOJIS[emoji_idx]} : {bio}\n\n"
             self.accounts_display.insert(tk.END, text)

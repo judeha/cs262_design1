@@ -7,6 +7,9 @@ import os
 import threading
 import server_handler
 from utils import database_setup
+import sys
+import logging
+import datetime as dt
 
 import io
 import json
@@ -21,6 +24,15 @@ import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
 import grpc
+
+
+
+
+def log_message_size(func_name, direction, message):
+    """Logs the size of a gRPC message."""
+    size = sys.getsizeof(message.SerializeToString())
+    # logging.info(f"{func_name} - {direction}: {size} bytes")
+    print(f"{func_name} - {direction}: {size} bytes")
 
 # Load configuration from YAML file
 yaml_path = "config.yaml"
@@ -64,11 +76,17 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         # logging.info(f"New connection established: {addr}")
 
     def Starting(self, request, context):
+        log_message_size("Starting", "Received", request)
         response = handler_pb2.StartingResponse()
         response.status_code = ResponseCode.SUCCESS.value
+       
+        log_message_size("Starting", "Sent", response)
+
         return response
     
     def CheckAccountExists(self, request, context):
+        log_message_size("Check Account Exists", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.AccountExistsResponse()
@@ -79,18 +97,24 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         else:
             response.status_code = ResponseCode.ACCOUNT_EXISTS.value
             response.exists = result
+
+        log_message_size("Check Account Exists", "Sent", response)
         return response
 
     def CreateAccount(self, request, context):
+        log_message_size("Create Account", "Received", request)
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.CreateAccountResponse()
         result = db.create_account(request.username, request.password, request.bio)
         # Package the response
         response.status_code = result["status_code"]
+        log_message_size("Create Account", "Sent", response)
         return response
     
     def LoginAccount(self, request, context):
+        log_message_size("Login Account", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.LoginAccountResponse()
@@ -106,9 +130,15 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             # Add the client to the active clients mapping
             with lock:
                 active_clients[request.username] = queue.Queue()
+        
+        log_message_size("Login Account", "Sent", response)
+
         return response
         
     def ListAccount(self, request, context):
+        print("IN LIST ACCOUNT", log_message_size("List Account", "Received", request))
+       
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         response = handler_pb2.ListAccountResponse()
         result = db.list_accounts(request.pattern)
@@ -120,17 +150,26 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = result["data"]
             data = [handler_pb2.Account(id=acct[0], username=acct[1], bio=acct[2]) for acct in data]
             response.acct_lst.extend(data)
+
+        log_message_size("List Account", "Sent", response)
+
         return response 
     
     def DeleteAccount(self, request, context):
+        log_message_size("Delete Account", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         response = handler_pb2.DeleteAccountResponse()
         result = db.delete_account(request.username, request.password)
         # Package the response
         response.status_code = result["status_code"]
+        log_message_size("Delete Account", "Sent", response)
+
         return response
 
     def FetchHomepage(self, request, context):
+        log_message_size("Fetch Homepage", "Received", request)
+
         db = DatabaseHandler(DB_PATH)
         # Create fresh DB instance
         response = handler_pb2.FetchHomepageResponse()
@@ -142,9 +181,14 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+
+        log_message_size("Fetch Homepage", "Sent", response)
+
         return response 
 
     def FetchMessageRead(self, request, context):
+        log_message_size("Fetch Message Read", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesReadResponse()
         result = db.fetch_messages_delivered(request.username, request.num)
@@ -155,9 +199,14 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+
+        log_message_size("Fetch Message Read", "Sent", response)
+
         return response 
 
     def FetchMessageUnread(self, request, context):
+        log_message_size("Fetch Message Unread", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesUnreadResponse()
         result = db.fetch_messages_undelivered(request.username, request.num)
@@ -170,10 +219,14 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
         # return self.FetchHomepage(request.username)
+        log_message_size("Fetch Message Unread", "Sent", response)
+
         return response
 
 
     def DeleteMessage(self, request, context):
+        log_message_size("Delete Message", "Received", request)
+
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.DeleteMessageResponse()
@@ -186,9 +239,13 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
                                         content=msg[3],timestamp=msg[4]) for msg in data]
             response.msg_lst.extend(data)
+        
+        log_message_size("Delete Message", "Sent", response)
+
         return response
     
     def SendMessage(self, request, context):
+        log_message_size("Send Message", "Received", request)
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.SendMessageResponse()
@@ -223,11 +280,15 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
             except Exception as e:
                 print("Error sending message:", e)
-            
+
+        log_message_size("Send Message", "Sent", response)
+
         return response
     
     def ReceiveMessage(self, request, context):
         """Continuously stream new messages to the client."""
+
+        log_message_size("Receive Message", "Received", request)
         username = request.username
         with lock:
             if username not in active_clients:
@@ -250,12 +311,14 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def Ending(self, request, context):
         """Removes a client from active_clients."""
+        log_message_size("Ending", "Received", request)
         username = request.username
         with lock:
             if username in active_clients:
                 del active_clients[username]
                 response = handler_pb2.EndingResponse()
                 response.status_code = ResponseCode.SUCCESS.value
+                log_message_size("Ending", "Sent", response)
                 return response
 
 def serve(host, port):
