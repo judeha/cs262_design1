@@ -49,14 +49,19 @@ class DatabaseHandler():
         """ Initialize connection given database path """
         try:
             self.path = path
-            self.conn = sqlite3.connect(self.path)
-            self.cursor = self.conn.cursor()
+            # self.conn = sqlite3.connect(self.path)
+            # self.cursor = self.conn.cursor()
         except sqlite3.Error as e:
             print(f"Database connection error: {e}")
+
+    def get_connection(self):
+        return sqlite3.connect(self.path, check_same_thread=False)
 
     def create_account(self, username, password, bio) -> dict[int]:
         """ Given username and password, return account creation status """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Enforce username and password constraints
             if len(username) < MIN_USERNAME_LEN or len(password) < MIN_PASSWORD_LEN or len(username) > MAX_USERNAME_LEN or len(password) > MAX_PASSWORD_LEN:
                 return {"status_code": ResponseCode.BAD_REQUEST.value}
@@ -64,12 +69,13 @@ class DatabaseHandler():
             if self.account_exists(username):
                 return {"status_code": ResponseCode.ACCOUNT_EXISTS.value}
             # Create account
-            self.cursor.execute("INSERT INTO accounts (username, password, bio) VALUES (?, ?, ?)", (username, password, bio))
+            cursor.execute("INSERT INTO accounts (username, password, bio) VALUES (?, ?, ?)", (username, password, bio))
             # Embed bio
             bio_embedding = model.encode(bio)  # convert bio to vector
             bio_embedding_blob = bio_embedding.tobytes()  # convert to BLOB object
-            self.cursor.execute("UPDATE accounts SET bio_embedding = ? WHERE username = ?", (bio_embedding_blob, username))
-            self.conn.commit()
+            cursor.execute("UPDATE accounts SET bio_embedding = ? WHERE username = ?", (bio_embedding_blob, username))
+            conn.commit()
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -83,11 +89,14 @@ class DatabaseHandler():
         - data: Homepage data
         """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Authenticate account
-            self.cursor.execute("SELECT * FROM accounts WHERE username=? AND password=?", (username, password))
-            user = self.cursor.fetchone()
+            cursor.execute("SELECT * FROM accounts WHERE username=? AND password=?", (username, password))
+            user = cursor.fetchone()
             if not user:
                 return {"status_code": ResponseCode.INVALID_CREDENTIALS.value}
+            conn.close()
             # Fetch homepage
             return self.fetch_homepage(username)
         except sqlite3.Error as e:
@@ -97,15 +106,18 @@ class DatabaseHandler():
     def delete_account(self, username, password) -> dict[int]:
         """ Given username and password, return account deletion status """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Check if account exists
             if not self.account_exists(username):
                 return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
             # Delete account
-            self.cursor.execute("DELETE FROM accounts WHERE username=?", (username,))
-            self.conn.commit() # NOTE: unsent messages will be stored in undelivered
+            cursor.execute("DELETE FROM accounts WHERE username=?", (username,))
+            conn.commit() # NOTE: unsent messages will be stored in undelivered
             # Delete all messages to this username
-            self.cursor.execute("DELETE FROM messages WHERE receiver=?", (username,))
-            self.conn.commit()
+            cursor.execute("DELETE FROM messages WHERE receiver=?", (username,))
+            conn.commit()
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -114,12 +126,15 @@ class DatabaseHandler():
     def fetch_homepage(self, username) -> dict[int, Union[int, list[tuple]]]:
         """ Given a username, return homepage data: count of unread messages and a list of last MAX_VIEW read messages """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Fetch up to last 5 messages
-            self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?", (username,MAX_VIEW,))
-            messages = self.cursor.fetchall()
+            cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?", (username,MAX_VIEW,))
+            messages = cursor.fetchall()
             # Count unread messages
             count = self.count_messages(username, False)
             assert(count != -1)
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value, "data": [count] + messages}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -128,13 +143,16 @@ class DatabaseHandler():
     def list_accounts(self, pattern:str=None) -> dict[int, list[tuple]]:
         """ Return a list of all accounts, optionally filtered by a pattern """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Fetch all accounts that match the pattern
             if pattern is not None:
-                self.cursor.execute("SELECT id, username, bio FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
+                cursor.execute("SELECT id, username, bio FROM accounts WHERE username LIKE ?", (f"%{pattern}%",))
             # Fetch all accounts
             else:
-                self.cursor.execute("SELECT id, username, bio FROM accounts")
-            accounts = self.cursor.fetchall()
+                cursor.execute("SELECT id, username, bio FROM accounts")
+            accounts = cursor.fetchall()
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value, "data": accounts}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -143,6 +161,8 @@ class DatabaseHandler():
     def insert_message(self, sender, receiver, content, timestamp: int, delivered: bool) -> dict[int]:
         """ Given message content, return message insertion status """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Check both accounts exist
             if not self.account_exists(sender) or not self.account_exists(receiver):
                 return {"status_code": ResponseCode.ACCOUNT_NOT_FOUND.value}
@@ -150,10 +170,12 @@ class DatabaseHandler():
             if len(content) < MIN_MESSAGE_LEN or len(content) > MAX_MESSAGE_LEN:
                 return {"status_code": ResponseCode.BAD_REQUEST.value}
             # Insert message
-            self.cursor.execute("INSERT INTO messages (sender, receiver, content, timestamp, delivered) VALUES (?, ?, ?, ?, ?)", 
+            cursor.execute("INSERT INTO messages (sender, receiver, content, timestamp, delivered) VALUES (?, ?, ?, ?, ?)", 
                 (sender, receiver, content, timestamp, delivered))
-            self.conn.commit()
-            return {"status_code": ResponseCode.SUCCESS.value}
+            id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return {"status_code": ResponseCode.SUCCESS.value,"data": [id]}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
             return {"status_code": ResponseCode.MESSAGE_SEND_FAILURE.value}
@@ -161,10 +183,13 @@ class DatabaseHandler():
     def delete_messages(self, username, message_ids: list) -> dict[int, Union[int, list[tuple]]]:
         """ Given a list of message ids, return message deletion status and updated homepage data """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Delete messages
             for m in message_ids:
-                self.cursor.execute("DELETE FROM messages WHERE receiver=? AND id=?", (username, m))
-            self.conn.commit()
+                cursor.execute("DELETE FROM messages WHERE receiver=? AND id=?", (username, m))
+            conn.commit()
+            conn.close()
             # Fetch updated homepage
             return self.fetch_homepage(username)
         except sqlite3.Error as e:
@@ -175,10 +200,13 @@ class DatabaseHandler():
     def fetch_messages_delivered(self, username, n: int) -> dict[int, list[tuple]]: 
         """ Given a username and n, return their last n delivered messages """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Fetch last n messages of type delivered
-            self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?",
+            cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=1 ORDER BY timestamp DESC LIMIT ?",
                                 (username, n))
-            messages = self.cursor.fetchall()
+            messages = cursor.fetchall()
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value, "data": messages}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -187,16 +215,20 @@ class DatabaseHandler():
     def fetch_messages_undelivered(self, username, n: int) -> dict[int, Union[int, list[tuple]]]:
         """ Given a username and n, fetch their last n undelivered messages and return their updated homepage data """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Fetch last n messages of type undelivered
-            self.cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=0 ORDER BY timestamp DESC LIMIT ?",
+            cursor.execute("SELECT * FROM messages WHERE receiver=? AND delivered=0 ORDER BY timestamp DESC LIMIT ?",
                                 (username, n))
-            messages = self.cursor.fetchall()
+            messages = cursor.fetchall()
             # Mark messages as delivered
             message_ids = [m[0] for m in messages]
             placeholders = ','.join('?' * len(message_ids))
             query = f"UPDATE messages SET delivered=1 WHERE id IN ({placeholders})"
-            self.cursor.execute(query, message_ids)
-            self.conn.commit()
+            cursor.execute(query, message_ids)
+            conn.commit()
+
+            conn.close()
             # Fetch homepage
             return self.fetch_homepage(username)
         except sqlite3.Error as e:
@@ -206,9 +238,11 @@ class DatabaseHandler():
     def match_users(self, username) -> list:
         """Find the most similar user based on bio using cosine similarity."""
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Fetch the user's embedding
-            self.cursor.execute("SELECT bio_embedding FROM accounts WHERE username=?", (username,))
-            my_blob = self.cursor.fetchone()[0]
+            cursor.execute("SELECT bio_embedding FROM accounts WHERE username=?", (username,))
+            my_blob = cursor.fetchone()[0]
             # Convert BLOB back to NumPy array
             my_embedding = np.frombuffer(my_blob, dtype=np.float32)
 
@@ -224,16 +258,20 @@ class DatabaseHandler():
             worst_similarity = round(similarities[worst_idx] * 100)
 
             # Return the worst match's username and bio
-            self.cursor.execute("SELECT username, bio FROM accounts WHERE id=?", (user_ids[worst_idx],))
-            worst_match = self.cursor.fetchone()
+            cursor.execute("SELECT username, bio FROM accounts WHERE id=?", (user_ids[worst_idx],))
+            worst_match = cursor.fetchone()
+
+            conn.close()
             return {"status_code": ResponseCode.SUCCESS.value, "data": [worst_match, worst_similarity]}
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
     def get_all_embeddings(self):
-        self.cursor.execute("SELECT id, username, bio_embedding FROM accounts WHERE bio_embedding IS NOT NULL")
-        users = self.cursor.fetchall()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, bio_embedding FROM accounts WHERE bio_embedding IS NOT NULL")
+        users = cursor.fetchall()
         
         user_ids, usernames, bio_vectors = [], [], []
         
@@ -243,14 +281,18 @@ class DatabaseHandler():
             usernames.append(username)
             bio_vectors.append(bio_vector)
         
+        conn.close()
         return user_ids, usernames, np.array(bio_vectors)
 
     def count_messages(self, username, delivered: bool) -> int:
         """ Given a username and delivered status, return the count of delivered or undelivered messages """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Count messages to reciever of type delivered or undelivered
-            self.cursor.execute("SELECT COUNT(*) FROM messages WHERE receiver=? AND delivered=?", (username, delivered))
-            count = self.cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM messages WHERE receiver=? AND delivered=?", (username, delivered))
+            count = cursor.fetchone()[0]
+            conn.close()
             return count
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
@@ -259,14 +301,18 @@ class DatabaseHandler():
     def account_exists(self, username) -> bool:
         """ Given a username, return whether the account exists """
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             # Check if account exists
-            self.cursor.execute("SELECT * FROM accounts WHERE username=?", (username,))
-            user = self.cursor.fetchone()
+            cursor.execute("SELECT * FROM accounts WHERE username=?", (username,))
+            user = cursor.fetchone()
+            conn.close()
             return user is not None
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
             return -1
     
     def close(self):
-        """ Close the database connection """
-        self.conn.close()
+        # """ Close the database connection """
+        # self.conn.close()
+        pass

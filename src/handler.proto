@@ -1,10 +1,8 @@
 syntax = "proto3";
 
-import "google/protobuf/empty.proto";
-
 // gRPC service definition
 service Handler {
-    rpc Starting(google.protobuf.Empty) returns (StartingResponse);
+    rpc Ending(EndingRequest) returns (EndingResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -15,11 +13,14 @@ service Handler {
     rpc FetchMessageRead(FetchMessagesReadRequest) returns (FetchMessagesReadResponse);
     rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
-    rpc ReceiveMessage(stream ReceiveMessageResponse) returns (stream ReceiveMessageResponse);
+    rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse);
 }
 
-// Message for Starting
-message StartingResponse {
+// Message for Ending
+message EndingRequest {
+    string username = 1;
+}
+message EndingResponse {
     int32 status_code = 1;
 }
 
@@ -69,6 +70,7 @@ message ListAccountResponse {
 // Message for deleting an account
 message DeleteAccountRequest {
     string username = 1;
+    string password = 2;
 }
 
 message DeleteAccountResponse {
@@ -123,7 +125,7 @@ message DeleteMessageResponse {
 
 // Message for sending a message
 message SendMessageRequest {
-    string username = 1;
+    string sender = 1;
     string receiver = 2;
     string content = 3;
 }
@@ -133,6 +135,10 @@ message SendMessageResponse {
 }
 
 // Message for receiving a message
+message ReceiveMessageRequest {
+    string username = 1;
+}
+
 message ReceiveMessageResponse {
     repeated Message msg_lst = 1;
 }

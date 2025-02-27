@@ -3,7 +3,6 @@
 import grpc
 import warnings
 
-from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 import handler_pb2 as handler__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
@@ -36,10 +35,10 @@ class HandlerStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Starting = channel.unary_unary(
-                '/Handler/Starting',
-                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
-                response_deserializer=handler__pb2.StartingResponse.FromString,
+        self.Ending = channel.unary_unary(
+                '/Handler/Ending',
+                request_serializer=handler__pb2.EndingRequest.SerializeToString,
+                response_deserializer=handler__pb2.EndingResponse.FromString,
                 _registered_method=True)
         self.CheckAccountExists = channel.unary_unary(
                 '/Handler/CheckAccountExists',
@@ -91,9 +90,9 @@ class HandlerStub(object):
                 request_serializer=handler__pb2.SendMessageRequest.SerializeToString,
                 response_deserializer=handler__pb2.SendMessageResponse.FromString,
                 _registered_method=True)
-        self.ReceiveMessage = channel.stream_stream(
+        self.ReceiveMessage = channel.unary_stream(
                 '/Handler/ReceiveMessage',
-                request_serializer=handler__pb2.ReceiveMessageResponse.SerializeToString,
+                request_serializer=handler__pb2.ReceiveMessageRequest.SerializeToString,
                 response_deserializer=handler__pb2.ReceiveMessageResponse.FromString,
                 _registered_method=True)
 
@@ -102,7 +101,7 @@ class HandlerServicer(object):
     """gRPC service definition
     """
 
-    def Starting(self, request, context):
+    def Ending(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -168,7 +167,7 @@ class HandlerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReceiveMessage(self, request_iterator, context):
+    def ReceiveMessage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -177,10 +176,10 @@ class HandlerServicer(object):
 
 def add_HandlerServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Starting': grpc.unary_unary_rpc_method_handler(
-                    servicer.Starting,
-                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
-                    response_serializer=handler__pb2.StartingResponse.SerializeToString,
+            'Ending': grpc.unary_unary_rpc_method_handler(
+                    servicer.Ending,
+                    request_deserializer=handler__pb2.EndingRequest.FromString,
+                    response_serializer=handler__pb2.EndingResponse.SerializeToString,
             ),
             'CheckAccountExists': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckAccountExists,
@@ -232,9 +231,9 @@ def add_HandlerServicer_to_server(servicer, server):
                     request_deserializer=handler__pb2.SendMessageRequest.FromString,
                     response_serializer=handler__pb2.SendMessageResponse.SerializeToString,
             ),
-            'ReceiveMessage': grpc.stream_stream_rpc_method_handler(
+            'ReceiveMessage': grpc.unary_stream_rpc_method_handler(
                     servicer.ReceiveMessage,
-                    request_deserializer=handler__pb2.ReceiveMessageResponse.FromString,
+                    request_deserializer=handler__pb2.ReceiveMessageRequest.FromString,
                     response_serializer=handler__pb2.ReceiveMessageResponse.SerializeToString,
             ),
     }
@@ -250,7 +249,7 @@ class Handler(object):
     """
 
     @staticmethod
-    def Starting(request,
+    def Ending(request,
             target,
             options=(),
             channel_credentials=None,
@@ -263,9 +262,9 @@ class Handler(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/Handler/Starting',
-            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
-            handler__pb2.StartingResponse.FromString,
+            '/Handler/Ending',
+            handler__pb2.EndingRequest.SerializeToString,
+            handler__pb2.EndingResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -547,7 +546,7 @@ class Handler(object):
             _registered_method=True)
 
     @staticmethod
-    def ReceiveMessage(request_iterator,
+    def ReceiveMessage(request,
             target,
             options=(),
             channel_credentials=None,
@@ -557,11 +556,11 @@ class Handler(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.stream_stream(
-            request_iterator,
+        return grpc.experimental.unary_stream(
+            request,
             target,
             '/Handler/ReceiveMessage',
-            handler__pb2.ReceiveMessageResponse.SerializeToString,
+            handler__pb2.ReceiveMessageRequest.SerializeToString,
             handler__pb2.ReceiveMessageResponse.FromString,
             options,
             channel_credentials,
