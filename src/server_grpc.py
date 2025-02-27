@@ -1,22 +1,13 @@
 import selectors
-import socket
-import traceback
 import yaml
 import queue
-import os
 import threading
-import server_handler
 from utils import database_setup
-
-import io
-import json
 import yaml
-import struct
 import time
-import ssl
 import logging
 from database import DatabaseHandler
-from utils import encode_protocol, decode_protocol, ResponseCode, OpCode
+from utils import ResponseCode
 import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
@@ -40,7 +31,7 @@ lock = threading.Lock()
 
 # Initialize the selector and database
 sel = selectors.DefaultSelector()
-database_setup(DB_PATH)
+# database_setup(DB_PATH)
     
 # Load configuration
 yaml_path = "config.yaml"
@@ -61,8 +52,12 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         # self.db = DatabaseHandler(DB_PATH)
         # Active clients mapping (username -> Message object)
         global active_clients
+        self.db_path = DB_PATH
 
         # logging.info(f"New connection established: {addr}")
+
+    def set_path(self, path):
+        self.db_path = path
 
     def Starting(self, request, context):
         response = handler_pb2.StartingResponse()
@@ -70,7 +65,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def CheckAccountExists(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.AccountExistsResponse()
         result = db.account_exists(request.username)
@@ -83,7 +78,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
 
     def CreateAccount(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.CreateAccountResponse()
         result = db.create_account(request.username, request.password, request.bio)
@@ -92,7 +87,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def LoginAccount(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.LoginAccountResponse()
         result = db.login_account(request.username, request.password)
@@ -110,7 +105,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
         
     def ListAccount(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.ListAccountResponse()
         result = db.list_accounts(request.pattern)
 
@@ -124,7 +119,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
     
     def DeleteAccount(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.DeleteAccountResponse()
         result = db.delete_account(request.username, request.password)
         # Package the response
@@ -132,7 +127,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
 
     def FetchHomepage(self, request, context):
-        db = DatabaseHandler(DB_PATH)
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Create fresh DB instance
         response = handler_pb2.FetchHomepageResponse()
         result = db.fetch_homepage(request.username)
@@ -146,7 +141,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
 
     def FetchMessageRead(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesReadResponse()
         result = db.fetch_messages_delivered(request.username, request.num)
 
@@ -159,7 +154,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
 
     def FetchMessageUnread(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesUnreadResponse()
         result = db.fetch_messages_undelivered(request.username, request.num)
 
@@ -175,7 +170,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
 
     def DeleteMessage(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.DeleteMessageResponse()
         result = db.delete_messages(request.username, request.message_id_lst)
@@ -190,7 +185,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def SendMessage(self, request, context):
-        db = DatabaseHandler(DB_PATH)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.SendMessageResponse()
         sender = request.sender
@@ -232,7 +227,6 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         username = request.username
         with lock:
             if username not in active_clients:
-                print(active_clients)
                 return
 
             user_queue = active_clients[username]
@@ -240,7 +234,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         while True:
             try:
                 # block for up to 30s waiting for a new message
-                msg = user_queue.get(timeout=30)
+                msg = user_queue.get(timeout=5)
                 response = handler_pb2.ReceiveMessageResponse()
                 response.msg_lst.append(msg)
                 yield response
