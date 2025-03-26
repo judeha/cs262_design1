@@ -32,16 +32,16 @@ LOG_PATH = server_config.get("log_path", "logs/s0.log")
 active_clients = {} # Active clients mapping (username -> socket)
 lock = threading.Lock()
 # create log handler
-local_log = logging.getLogger()
-local_log.setLevel(logging.INFO)
-handler = logging.FileHandler(LOG_PATH)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-local_log.addHandler(handler)
+logging.basicConfig(
+    filename=LOG_PATH,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logging.info("Server started")
 logging.info(f"Host: {DEFAULT_HOST}")
 logging.info(f"Port: {DEFAULT_PORT}")
+
 
 # Initialize the database
 database_setup(DB_PATH)
