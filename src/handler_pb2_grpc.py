@@ -36,10 +36,20 @@ class HandlerStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.Status = channel.unary_unary(
+                '/Handler/Status',
+                request_serializer=handler__pb2.Empty.SerializeToString,
+                response_deserializer=handler__pb2.currentLeaderResponse.FromString,
+                _registered_method=True)
         self.Ending = channel.unary_unary(
                 '/Handler/Ending',
                 request_serializer=handler__pb2.EndingRequest.SerializeToString,
                 response_deserializer=handler__pb2.EndingResponse.FromString,
+                _registered_method=True)
+        self.NewLeader = channel.unary_unary(
+                '/Handler/NewLeader',
+                request_serializer=handler__pb2.Empty.SerializeToString,
+                response_deserializer=handler__pb2.NewLeaderResponse.FromString,
                 _registered_method=True)
         self.CheckAccountExists = channel.unary_unary(
                 '/Handler/CheckAccountExists',
@@ -102,7 +112,19 @@ class HandlerServicer(object):
     """gRPC service definition for client-server
     """
 
+    def Status(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Ending(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def NewLeader(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -177,10 +199,20 @@ class HandlerServicer(object):
 
 def add_HandlerServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'Status': grpc.unary_unary_rpc_method_handler(
+                    servicer.Status,
+                    request_deserializer=handler__pb2.Empty.FromString,
+                    response_serializer=handler__pb2.currentLeaderResponse.SerializeToString,
+            ),
             'Ending': grpc.unary_unary_rpc_method_handler(
                     servicer.Ending,
                     request_deserializer=handler__pb2.EndingRequest.FromString,
                     response_serializer=handler__pb2.EndingResponse.SerializeToString,
+            ),
+            'NewLeader': grpc.unary_unary_rpc_method_handler(
+                    servicer.NewLeader,
+                    request_deserializer=handler__pb2.Empty.FromString,
+                    response_serializer=handler__pb2.NewLeaderResponse.SerializeToString,
             ),
             'CheckAccountExists': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckAccountExists,
@@ -250,6 +282,33 @@ class Handler(object):
     """
 
     @staticmethod
+    def Status(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Handler/Status',
+            handler__pb2.Empty.SerializeToString,
+            handler__pb2.currentLeaderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def Ending(request,
             target,
             options=(),
@@ -266,6 +325,33 @@ class Handler(object):
             '/Handler/Ending',
             handler__pb2.EndingRequest.SerializeToString,
             handler__pb2.EndingResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def NewLeader(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Handler/NewLeader',
+            handler__pb2.Empty.SerializeToString,
+            handler__pb2.NewLeaderResponse.FromString,
             options,
             channel_credentials,
             insecure,

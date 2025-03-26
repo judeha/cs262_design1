@@ -91,3 +91,9 @@ def test_ending(grpc_stub):
         handler_pb2.EndingRequest(username="testuser")
     )
     assert response.status_code == 0  # SUCCESS
+
+
+
+def test_ending(grpc_stub):
+    pass
+

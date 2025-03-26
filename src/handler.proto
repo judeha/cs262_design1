@@ -6,7 +6,7 @@ import "google/protobuf/empty.proto";
 service Handler {
     rpc Status(Empty) returns (currentLeaderResponse);
     rpc Ending(EndingRequest) returns (EndingResponse);
-    rpc NewLeader(NewLeaderRequest) returns (NewLeaderResponse);
+    rpc NewLeader(Empty) returns (NewLeaderResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -30,6 +30,18 @@ service Raft {
 // ----------------------------------------------------------------------------------------------
 // Client Handler Messages
 // ----------------------------------------------------------------------------------------------
+message Empty{
+}
+
+message NewLeaderResponse{
+    int32 new_leader_id = 1;
+    string role = 2;
+}
+
+message currentLeaderResponse{
+    int32 current_leader_id = 1;
+    string role = 2;
+}
 
 // Message for Ending
 message EndingRequest {
