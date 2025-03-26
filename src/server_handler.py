@@ -20,7 +20,7 @@ with open(yaml_path, "r") as y:
 
 # Defaults
 VERSION = config["version"]
-DB_PATH = config["db_path"]
+DB_PATH = config.get("db_path", None)
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
 
