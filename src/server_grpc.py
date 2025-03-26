@@ -1,4 +1,3 @@
-import selectors
 import yaml
 import queue
 import threading
@@ -12,6 +11,7 @@ import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
 import grpc
+import random
 
 # Load configuration from YAML file
 yaml_path = "config.yaml"
@@ -19,13 +19,14 @@ with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 
 # Get values from config
-DEFAULT_HOST = config.get("host", "127.0.0.1")
-DEFAULT_PORT = config.get("port", 65432)
-DEFAULT_PROTOCOL = config.get("protocol", 0)
-DB_PATH = config.get("db_path", "data/s0.db")
-LOG_PATH = config.get("log_path", "logs/s0.log")
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
+idx = 0
+server_config = config.get("servers")[idx]
+DEFAULT_HOST = server_config.get("host", "localhost")
+DEFAULT_PORT = server_config.get("port", 65432)
+DB_PATH = server_config.get("db_path", "data/s0.db")
+LOG_PATH = server_config.get("log_path", "logs/s0.log")
 
 # Global variables
 active_clients = {} # Active clients mapping (username -> socket)
@@ -44,6 +45,21 @@ logging.info(f"Port: {DEFAULT_PORT}")
 
 # Initialize the database
 database_setup(DB_PATH)
+
+# Raft variables
+class Role:
+    FOLLOWER = 0
+    CANDIDATE = 1
+    LEADER = 2
+role = Role.FOLLOWER
+term = 0
+logs = []
+leader_addr = None
+n_servers = len(server_config)
+timer = random.randint(0,3)
+commit_idx = 0
+voted_for = None
+votes_recv = 0
 
 class HandlerService(handler_pb2_grpc.HandlerServicer):
     """
