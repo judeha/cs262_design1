@@ -52,10 +52,11 @@ class Role:
     CANDIDATE = 1
     LEADER = 2
 role = Role.FOLLOWER
-term = 0
-logs = []
 leader_addr = None
-n_servers = len(server_config)
+n_servers = len(config.get("servers"))
+all_servers = [f"{config.get("servers")[i].get("host")}:{config.get("servers")[i].get("port")}" for i in range(n_servers)]
+logs = []
+term = 0
 timer = random.randint(0,3)
 commit_idx = 0
 voted_for = None
@@ -311,10 +312,117 @@ class RaftService(handler_pb2_grpc.RaftServicer):
         return handler_pb2.GetLeaderResponse(leader_addr=leader_addr)
 
 def serve(host, port):
+    """Main loop"""
+    global all_servers, votes_recv, idx, term, role, timer, logs, commit_idx, voted_for, DEFAULT_HOST, DEFAULT_PORT, n_servers, leader_addr
+
+    # Setup
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     handler_pb2_grpc.add_HandlerServicer_to_server(HandlerService(), server)
+    handler_pb2_grpc.add_RaftServicer_to_server(RaftService(), server)
     server.add_insecure_port(f'{host}:{port}')
     server.start()
+
+    # Connect to all other servers + elect leader
+    for s in all_servers:
+        try:
+            channel = grpc.insecure_channel(s)
+            stub = handler_pb2_grpc.RaftStub(channel)
+            response = stub.Vote(handler_pb2.VoteRequest(
+                term=-1,
+                candidate_id=0, # auto select first server as leader to begin with
+                prev_log_idx=0,
+                prev_log_term=0
+                )
+            )
+            # TODO: local logging
+            channel.close()
+            break
+        except Exception as e:
+            # TODO: local logging
+            time.sleep(1)
+
+    # TODO: local logging
+    # Sleep for random amount of time to allow for election
+    time.sleep(random.random())
+
+    # Take actions based on role
+    try:
+        while True:
+            if role == Role.FOLLOWER:
+                # If no leader heartbeat: trigger election (will automatically call AppendEntries upon receiving)
+                if time.time() > timer:
+                    # TODO: local logging
+                    term += 1
+                    role = Role.CANDIDATE
+            elif role == Role.CANDIDATE:
+                timer += time.time() + random.randint(0,3) # NOTE: why?
+                # Vote for self
+                votes_recv = 1
+                voted_for = idx
+                # TODO: local logging
+
+                # Request other servers to vote for me
+                for s in all_servers:
+                    try:
+                        channel = grpc.insecure_channel(s)
+                        stub = handler_pb2_grpc.RaftStub(channel)
+                        response = stub.Vote(handler_pb2.VoteRequest(
+                            cand_id=idx,
+                            cand_term=term,
+                            prev_log_idx=len(logs) - 1,
+                            prev_log_term=logs[-1].term if logs else 0,
+                            )
+                        )
+                        # TODO: local logging
+                        if response.success:
+                            votes_recv += 1
+                    except Exception as e:
+                        continue
+                        # TODO: local logging
+                # If you win the election
+                if votes_recv > n_servers // 2:
+                    role = Role.LEADER
+                    leader_addr = f"{host}:{port}"
+                    # TODO: broadcast to all other servers + client?
+                # TODO: local logging
+            elif role == Role.LEADER:
+                # Send heartbeat
+                ack = 0
+                for s in all_servers:
+                    try:
+                        channel = grpc.insecure_channel(s)
+                        stub = handler_pb2_grpc.RaftStub(channel)
+                        # Send out all logs TODO: optimize to just send snapshot
+                        response = stub.AppendEntries(handler_pb2_grpc.AppendEntriesRequest(
+                             leader_address=leader_addr,
+                             term=term,
+                             prev_log_term=logs[-1].term if logs else 0,
+                             prev_log_idx=len(logs) - 1,
+                             entries=logs,
+                             commit=commit_idx)
+                        )
+                        ack += response.success
+                        # TODO: local logging
+                        channel.close()
+                    except Exception as e:
+                        # TODO: local logging
+                        pass
+                # If ACK successful
+                if ack > n_servers // 2:
+                    # Commit change --> move forward index
+                    commit_idx = len(logs) - 1
+                else:
+                    # Lose leader role
+                    role = Role.FOLLOWER
+                    leader_addr = None
+                    # TODO: local logging
+            else:
+                pass
+                # TODO: local logging
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        server.stop(0)
+
     server.wait_for_termination()
 
 if __name__ == "__main__":
