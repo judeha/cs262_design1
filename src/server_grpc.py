@@ -86,7 +86,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     def CheckAccountExists(self, request, context):
         """Check if an account with the given username exists"""
         # Add a new log entry
-        logs.append(handler_pb2.Entry(acc_exists=request))
+        logs.append(handler_pb2.Entry(action="CheckAccountExists", username=request.username))
 
         # Create fresh DB instance
         db = DatabaseHandler(self.db_path)
@@ -103,7 +103,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def CreateAccount(self, request, context):
         """Create a new account (username, password, bio)"""
-        logs.append(handler_pb2.Entry(create_acc=request))
+        logs.append(handler_pb2.Entry(action="CreateAccount", username=request.username, password=request.password, bio=request.bio))
         db = DatabaseHandler(self.db_path)
 
         response = handler_pb2.CreateAccountResponse()
@@ -113,7 +113,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     
     def LoginAccount(self, request, context):
         """Login to an existing account (username, password), returns some unread messages """
-        logs.append(handler_pb2.Entry(login_acc=request))
+        logs.append(handler_pb2.Entry(action="LoginAccount", username=request.username, password=request.password))
         db = DatabaseHandler(self.db_path)
         
         response = handler_pb2.LoginAccountResponse()
@@ -138,7 +138,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         
     def ListAccount(self, request, context):
         """List all accounts matching an optoinal pattern"""
-        logs.append(handler_pb2.Entry(list_acc=request))
+        logs.append(handler_pb2.Entry(action="ListAccount", pattern=request.pattern))
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         
         response = handler_pb2.ListAccountResponse()
@@ -159,7 +159,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     
     def DeleteAccount(self, request, context):
         """Deletes an account (username, password)"""
-        logs.append(handler_pb2.Entry(delete_acc=request))
+        logs.append(handler_pb2.Entry(action="DeleteAccount", username=request.username, password=request.password))
         db = DatabaseHandler(self.db_path)
 
         response = handler_pb2.DeleteAccountResponse()
@@ -169,7 +169,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def FetchHomepage(self, request, context):
         """Fetches homepage data for a user"""
-        logs.append(handler_pb2.Entry(fetch_homepage=request))
+        logs.append(handler_pb2.Entry(action="FetchHomepage", username=request.username))
         db = DatabaseHandler(self.db_path)
 
         response = handler_pb2.FetchHomepageResponse()
@@ -192,7 +192,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def FetchMessageRead(self, request, context):
         """Fetches the last N delivered (read) messages"""
-        logs.append(handler_pb2.Entry(fetch_read=request))
+        logs.append(handler_pb2.Entry(action="FetchMessageRead", username=request.username, num=request.num))
         db = DatabaseHandler(self.db_path)
 
         response = handler_pb2.FetchMessagesReadResponse()
@@ -215,7 +215,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def FetchMessageUnread(self, request, context):
         """Fetches the last N undelivered (unread) messages"""
-        logs.append(handler_pb2.Entry(fetch_read=request))
+        logs.append(handler_pb2.Entry(action="FetchMessageUnread", username=request.username, num=request.num))
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         
         response = handler_pb2.FetchMessagesUnreadResponse()
@@ -239,7 +239,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def DeleteMessage(self, request, context):
         """Delete specific messages by ID"""
-        logs.append(handler_pb2.Entry(delete_msg=request))
+        logs.append(handler_pb2.Entry(action="DeleteMessage", username=request.username, message_id_lst=request.message_id_lst))
         db = DatabaseHandler(self.db_path)
 
         response = handler_pb2.DeleteMessageResponse()
@@ -261,52 +261,43 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             response.msg_lst.extend(pb_msgs)
         return response
     
-    def SendMessage(self, request_iterator, context):
+    def SendMessage(self, request, context):
         """
         Client-streaming RPC:
-        - Each "SendMessageRequest" from the iterator is a single message
         - Insert the message into the database
         - If the receiver is online, immediately push the message to their queue
         """
         db = DatabaseHandler(self.db_path)
-        delivered_count = 0
-        total_count = 0
 
-        for req in request_iterator:
-            sender = req.sender
-            receiver = req.receiver
-            content = req.content
-            timestamp = round(time.time())
+        sender = request.sender
+        receiver = request.receiver
+        content = request.content
+        timestamp = round(time.time())
 
-            # Add to 'logs' for replication
-            req.timestamp = timestamp
-            logs.append(handler_pb2.Entry(send_msg=req))
+        # Add to 'logs' for replication
+        logs.append(handler_pb2.Entry(action="SendMessage", sender=sender, receiver=receiver, content=content, timestamp=timestamp))
 
-            # Mark as delivered if receiver is online
-            with lock:
-                is_online = receiver in active_clients
+        # Mark as delivered if receiver is online
+        with lock:
+            is_online = receiver in active_clients
 
-            result = db.insert_message(sender, receiver, content, timestamp, is_online)
-            total_count += 1
-            if result["status_code"] == ResponseCode.SUCCESS.value:
-                # If receiver is online, push to their queue
-                if is_online:
-                    with lock:
-                        msg = handler_pb2.Message(
-                            id=result["data"][0],  # e.g. DB returns newly inserted ID
-                            sender=sender,
-                            receiver=receiver,
-                            content=content,
-                            timestamp=timestamp
-                        )
-                        active_clients[receiver].put(msg)
-                    delivered_count += 1
+        result = db.insert_message(sender, receiver, content, timestamp, is_online)
+        if result["status_code"] == ResponseCode.SUCCESS.value:
+            # If receiver is online, push to their queue
+            if is_online:
+                with lock:
+                    msg = handler_pb2.Message(
+                        id=result["data"][0],  # e.g. DB returns newly inserted ID
+                        sender=sender,
+                        receiver=receiver,
+                        content=content,
+                        timestamp=timestamp
+                    )
+                    active_clients[receiver].put(msg)
 
         # Build a final, single response
         response = handler_pb2.SendMessageResponse()
         response.status_code = ResponseCode.SUCCESS.value
-        # response.delivered_count = delivered_count
-        # response.total_count = total_count
         return response
     
     def ReceiveMessage(self, request, context):
@@ -314,7 +305,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         Continuously stream new messages to the client
         - Yields new messages from the user's queue as they arrive
         """
-        logs.append(handler_pb2.Entry(receive_msg=request))
+        logs.append(handler_pb2.Entry(action="ReceiveMessage", username=request.username))
         username = request.username
         with lock:
             if username not in active_clients:
@@ -336,7 +327,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def Ending(self, request, context):
         """Removes a client from active_clients (logout)."""
-        logs.append(handler_pb2.Entry(ending=request))
+        logs.append(handler_pb2.Entry(action="Ending", username=request.username))
         username = request.username
         with lock:
             if username in active_clients:

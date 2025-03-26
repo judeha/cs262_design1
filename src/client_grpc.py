@@ -40,7 +40,16 @@ MAX_VIEW = config["max_view"]
 class GRPCClient:
     def __init__(self, host, port):
         """Initialize the gRPC client and start a background thread for receiving messages."""
+<<<<<<< Updated upstream
         self.channel = grpc.insecure_channel(f"{host}:{port}")
+=======
+
+        self.live_servers = live_servers
+        self.leader_id = leader_id
+        self.leader_addr = f"{live_servers[leader_id]['host']}:{live_servers[leader_id]['port']}"
+
+        self.channel = grpc.insecure_channel(self.leader_addr)
+>>>>>>> Stashed changes
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
 
         self.username = None
@@ -62,15 +71,66 @@ class GRPCClient:
         """Continuously read streaming responses from server."""
         if not self.username:
             return
-        try:
-            request = handler_pb2.ReceiveMessageRequest(username=self.username)
-            for response in self.stub.ReceiveMessage(request):
-                # each response is a ReceiveMessageResponse with repeated msg_lst
-                for msg in response.msg_lst:
-                    self.incoming_queue.put(msg)
-        except grpc.RpcError as e:
-            return
+        request = handler_pb2.ReceiveMessageRequest(username=self.username)
+        for response in self.stub.ReceiveMessage(request):
+            # each response is a ReceiveMessageResponse with repeated msg_lst
+            for msg in response.msg_lst:
+                self.incoming_queue.put(msg)
         
+<<<<<<< Updated upstream
+=======
+    # def _failover_to_leader(self, new_leader_addr):
+    #     """Connect to the new leader given that we are connected to the wrong server"""
+
+    #     print(f"Failing over to new leader at {new_leader_addr}")
+    #     self.channel.close()
+    #     self.channel = grpc.insecure_channel(f"{new_leader_addr[0]}:{new_leader_addr[1]}")
+    #     self.stub = handler_pb2_grpc.HandlerStub(self.channel)
+
+    # def _find_new_leader(self):
+    #     """Continues to ping the servers until the new leader's address provided"""
+
+    #     while not self.stop_event.is_set():
+    #         try:
+    #             # Send Status request to the current server
+    #             response = self.stub.Status(handler_pb2.Empty())
+
+    #             if response.role == "LEADER": #TODO: Use variable instead
+        #             print(f"Found leader: {response.current_leader_id}")
+        #             self.leader_id = response.current_leader_id
+        #             break  # Exit loop once the leader is found
+                
+        #         print(f"Not the leader, retrying to find the leader...")
+            
+        #     except RpcError as e:
+        #         print(f"Error while trying to find leader: {e}")
+        #         print("Retrying to find the leader...")
+
+        #     # Sleep before retrying
+        #     time.sleep(POLL_INTERVAL)
+
+        # response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
+        # return response.new_leader_id
+        
+    # def poll_leader(self):
+    #     """Background thread that checks that the client is still connected to an active leader"""
+
+    #     while not self.stop_event.is_set():
+    #         try:
+    #             response = self.stub.Status(handler_pb2.Empty())
+    #             if response.role != "LEADER": 
+    #                 print(f"Current server is not leader!")
+                    
+    #                 #Assumes that the servers will find the next leader 
+    #                 self._failover_to_leader(self.live_servers[response.current_leader_id])
+    #             else:
+    #                 print(f"Connected to leader: {response.current_leader_id}")
+    #         except RpcError as e:
+    #             print(f"Lost connection to leader: {e}")
+    #             self._find_new_leader()
+    #         time.sleep(POLL_INTERVAL)
+
+>>>>>>> Stashed changes
     def send_message(self, receiver, content):
         """Send a message (unary call)."""
         if not self.username:
@@ -622,6 +682,12 @@ def main(args):
     root = tk.Tk()
     app = ChatGUI(root, grpc_client)
 
+<<<<<<< Updated upstream
+=======
+    #Replication!
+    # grpc_client.poll_leader()
+
+>>>>>>> Stashed changes
     # Define close loop
     def on_close():
         """Handle cleanup when closing the client window."""
