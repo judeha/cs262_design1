@@ -44,9 +44,7 @@ class GRPCClient:
 
         self.live_servers = live_servers
         self.leader_id = leader_id
-
-        self.host = live_servers[leader_id]['host']
-        self.port = live_servers[leader_id]['port']
+        self.leader_addr = f"{live_servers[leader_id].host}:{live_servers[leader_id].port}"
 
         self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
@@ -92,11 +90,12 @@ class GRPCClient:
         while not self.stop_event.is_set():
             try:
                 # Send Status request to the current server
-                response = self.stub.Status(handler_pb2.Empty())
+                response = self.stub.GetLeader(handler_pb2.Empty()) #TODO: add to Handler service too
 
-                if response.role == "LEADER": #TODO: Use variable instead
-                    print(f"Found leader: {response.current_leader_id}")
-                    self.leader_id = response.current_leader_id
+                if self.leader_addr != response.leader_addr:
+                    # print(f"Found leader: {response.leader_id}")
+                    self.leader_addr = response.leader_addr
+
                     break  # Exit loop once the leader is found
                 
                 print(f"Not the leader, retrying to find the leader...")
@@ -108,22 +107,23 @@ class GRPCClient:
             # Sleep before retrying
             time.sleep(POLL_INTERVAL)
 
-        response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
-        return response.new_leader_id
+        # response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
+        return response.leader_addr
         
     def poll_leader(self):
         """Background thread that checks that the client is still connected to an active leader"""
 
         while not self.stop_event.is_set():
             try:
-                response = self.stub.Status(handler_pb2.Empty())
-                if response.role != "LEADER": 
-                    print(f"Current server is not leader!")
-                    
+                response = self.stub.GetLeader(handler_pb2.Empty())
+                if self.leader_addr != response.leader_addr:
+                    self.leader_addr = response.leader_addr
                     #Assumes that the servers will find the next leader 
-                    self._failover_to_leader(self.live_servers[response.current_leader_id])
+                    self._failover_to_leader(self.leader_addr)
+
                 else:
-                    print(f"Connected to leader: {response.current_leader_id}")
+                    pass
+                    # print(f"Connected to leader: {response.current_leader_id}")
             except RpcError as e:
                 print(f"Lost connection to leader: {e}")
                 self._find_new_leader()
@@ -139,7 +139,7 @@ class GRPCClient:
             return resp
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     def get_new_messages(self):
         """Retrieve any messages from the local queue."""
@@ -152,7 +152,7 @@ class GRPCClient:
             return messages
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
 
     def stop(self):
@@ -167,17 +167,16 @@ class GRPCClient:
             return self.stub.CheckAccountExists(handler_pb2.AccountExistsRequest(username=username))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def create_account(self, username, password, bio):
         """Create a new account."""
         try:
-            return self.stub.CreateAccount(handler_pb2.CreateAccoun
-            tRequest(username=username, password=password, bio=bio))
+            return self.stub.CreateAccount(handler_pb2.CreateAccountRequest(username=username, password=password, bio=bio))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def login(self, username, password):
@@ -194,7 +193,7 @@ class GRPCClient:
             return resp
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def delete_account(self, username, password):
@@ -203,7 +202,7 @@ class GRPCClient:
             return self.stub.DeleteAccount(handler_pb2.DeleteAccountRequest(username=username, password=password))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def list_accounts(self, pattern=None):
@@ -212,7 +211,7 @@ class GRPCClient:
             return self.stub.ListAccount(handler_pb2.ListAccountRequest(pattern=pattern))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def delete_messages(self, username, msg_ids):
@@ -221,7 +220,7 @@ class GRPCClient:
             return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, message_id_lst=msg_ids))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def send_message(self, sender, receiver, content):
@@ -230,7 +229,7 @@ class GRPCClient:
             return self.stub.SendMessage(handler_pb2.SendMessageRequest(sender=sender, receiver=receiver, content=content))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def fetch_unread_messages(self, username, num_msgs):
@@ -239,7 +238,7 @@ class GRPCClient:
             return self.stub.FetchMessageUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num=num_msgs))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def fetch_read_messages(self, username, num_msgs):
@@ -248,7 +247,7 @@ class GRPCClient:
             return self.stub.FetchMessageRead(handler_pb2.FetchMessagesReadRequest(username=username, num=num_msgs))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
     def fetch_homepage(self, username):
@@ -257,7 +256,7 @@ class GRPCClient:
             return self.stub.FetchHomepage(handler_pb2.FetchHomepageRequest(username=username))
         except:
             self._find_new_leader()
-            self._failover_to_leader()
+            self._failover_to_leader(f"{self.host}:{self.port}")
 
     
 # -----------------------------------------------------------------------------
