@@ -6,7 +6,7 @@ import yaml
 import time
 import logging
 from database import DatabaseHandler
-from utils import ResponseCode
+from utils import ResponseCode, apply_action
 import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
@@ -31,7 +31,7 @@ LOG_PATH = server_config.get("log_path", "logs/s0.log")
 # Global variables
 active_clients = {} # Active clients mapping (username -> socket)
 lock = threading.Lock()
-# create log handler
+# Initialize local logging
 logging.basicConfig(
     filename=LOG_PATH,
     level=logging.INFO,
@@ -275,6 +275,40 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                 response = handler_pb2.EndingResponse()
                 response.status_code = ResponseCode.SUCCESS.value
                 return response
+            
+class RaftService(handler_pb2_grpc.RaftServicer):
+    def Vote(self, request, context):
+        global term, voted_for
+        # TODO: local logging
+        # If candidate is ahead of me, vote for them + update my term
+        if request.cand_term > term:
+            term = request.cand_term
+            voted_for = None
+            return handler_pb2.VoteResponse(term=term, vote_granted=True)
+        else:
+            return handler_pb2.VoteResponse(term=term, vote_granted=False)
+    def AppendEntries(self, request, context):
+        """Followers respond to leader's heartbeat"""
+        global leader_addr, logs, DB_PATH, timer
+        # TODO: implement checks if role is Role.LEADER
+        # TODO: local logging
+        timer = time.time() + random.randint(0,3) # NOTE: should this be +3 everytime?
+        
+        # 1) Update leader_addr?
+        if request.leader_addr != leader_addr:
+            leader_addr = request.leader_addr
+            # TODO: local logging
+        # 2) Exist new entries?
+        if len(logs) - 1 == request.prev_log_idx:
+            return handler_pb2.AppendEntriesResponse(term=term, success=True)
+        # 3) Apply actions
+        for entry in request.entries[request.commit + 1]:
+            logs.append(entry)
+            apply_action(entry, DB_PATH)
+        return handler_pb2.AppendEntriesResponse(term=request.term, success=True)
+    def GetLeader(self, request, context):
+        global leader_addr
+        return handler_pb2.GetLeaderResponse(leader_addr=leader_addr)
 
 def serve(host, port):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
