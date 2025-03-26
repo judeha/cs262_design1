@@ -62,6 +62,7 @@ timer = random.randint(0,3)
 commit_idx = 0
 voted_for = None
 votes_recv = 0
+last_heartbeat = time.time()
 
 class HandlerService(handler_pb2_grpc.HandlerServicer):
     """
@@ -352,22 +353,29 @@ class RaftService(handler_pb2_grpc.RaftServicer):
     def Vote(self, request, context):
         global term, voted_for, leader_addr
         # TODO: local logging
+        if request.cand_term < term or voted_for is None:
+            return handler_pb2.VoteResponse(term=term, success=False)
         # If candidate is ahead of me, vote for them + update my term
-        if request.cand_term > term:
+        if request.cand_term >= term:
             term = request.cand_term
-            voted_for = None
-            response = handler_pb2.VoteResponse(term=term, success=True)
-        else:
+            voted_for = request.cand_id
             leader_addr = None
-            response = handler_pb2.VoteResponse(term=term, success=False)
-        return response
+            return handler_pb2.VoteResponse(term=term, success=True)
+
     def AppendEntries(self, request, context):
         """Followers respond to leader's heartbeat"""
-        global leader_addr, logs, DB_PATH, timer
+        global leader_addr, logs, DB_PATH, timer, role, voted_for, last_heartbeat
         # TODO: implement checks if role is Role.LEADER
         # TODO: local logging
-        timer = time.time() + random.randint(0,3) # NOTE: should this be +3 everytime?
-        
+        voted_for = None
+        timer = time.time() + random.uniform(0.3, 0.5) # NOTE: should this be +3 everytime?
+        last_heartbeat = time.time()
+
+        if role == "LEADER":
+            pass
+            # TODO: local logging
+        role = "FOLLOWER"
+
         # 1) Update leader_addr?
         if request.leader_addr != leader_addr:
             leader_addr = request.leader_addr
@@ -409,10 +417,8 @@ def serve():
             )
             # TODO: local logging
             channel.close()
-            print("connecting...")
             break
         except Exception as e:
-            print(e)
             # TODO: local logging
             time.sleep(1)
 
@@ -423,71 +429,82 @@ def serve():
     # Take actions based on role
     try:
         while True:
+            print(leader_addr)
             if role == Role.FOLLOWER:
                 # If no leader heartbeat: trigger election (will automatically call AppendEntries upon receiving)
-                if time.time() > timer:
+                # if time.time() > timer:
+                if time.time() - last_heartbeat > 1:
                     # TODO: local logging
                     term += 1
+                    voted_for = None
                     role = Role.CANDIDATE
-            elif role == Role.CANDIDATE:
-                timer += time.time() + random.randint(0,3) # NOTE: why?
-                # Vote for self
-                votes_recv = 1
-                voted_for = idx
-                # TODO: local logging
+                    # timer = time.time() + random.uniform(1.0, 2.0)
 
-                # Request other servers to vote for me
-                for s in all_servers:
-                    try:
-                        channel = grpc.insecure_channel(s)
-                        stub = handler_pb2_grpc.RaftStub(channel)
-                        response = stub.Vote(handler_pb2.VoteRequest(
-                            cand_id=idx,
-                            cand_term=term,
-                            prev_log_idx=len(logs) - 1,
-                            prev_log_term=logs[-1].term if logs else 0,
+            elif role == Role.CANDIDATE:
+                if time.time() > timer:
+                    timer = time.time() + random.uniform(3,5) # NOTE: why?
+
+                    # Vote for self
+                    votes_recv = 1
+                    voted_for = idx
+                    # TODO: local logging
+
+                    # Request other servers to vote for me
+                    for s in all_servers:
+                        try:
+                            channel = grpc.insecure_channel(s)
+                            stub = handler_pb2_grpc.RaftStub(channel)
+                            response = stub.Vote(handler_pb2.VoteRequest(
+                                cand_id=idx,
+                                cand_term=term,
+                                prev_log_idx=len(logs) - 1,
+                                prev_log_term=logs[-1].term if logs else 0,
+                                )
                             )
-                        )
-                        # TODO: local logging
-                        if response.success:
-                            votes_recv += 1
-                    except Exception as e:
-                        continue
-                        # TODO: local logging
-                # If you win the election
-                if votes_recv > n_servers // 2:
-                    role = Role.LEADER
-                    leader_addr = f"{host}:{port}"
-                    # TODO: broadcast to all other servers + client?
-                # TODO: local logging
+                            # TODO: local logging
+                            if response.success:
+                                votes_recv += 1
+                        except Exception as e:
+                            continue
+                            # TODO: local logging
+                    # If you win the election
+                    if votes_recv > n_servers // 2:
+                        role = Role.LEADER
+                        leader_addr = f"{host}:{port}"
+                        # TODO: broadcast to all other servers + client?
+                    # TODO: local logging
             elif role == Role.LEADER:
                 # Send heartbeat
                 ack = 0
                 for s in all_servers:
                     try:
-                        channel = grpc.insecure_channel(s)
-                        stub = handler_pb2_grpc.RaftStub(channel)
-                        # Send out all logs TODO: optimize to just send snapshot
-                        response = stub.AppendEntries(handler_pb2_grpc.AppendEntriesRequest(
-                             leader_address=leader_addr,
-                             term=term,
-                             prev_log_term=logs[-1].term if logs else 0,
-                             prev_log_idx=len(logs) - 1,
-                             entries=logs,
-                             commit=commit_idx)
-                        )
-                        ack += response.success
-                        # TODO: local logging
-                        channel.close()
+                        if s != leader_addr: # NEW
+                            channel = grpc.insecure_channel(s)
+                            stub = handler_pb2_grpc.RaftStub(channel)
+                            # Send out all logs TODO: optimize to just send snapshot
+                            response = stub.AppendEntries(handler_pb2.AppendEntriesRequest(
+                                leader_addr=leader_addr,
+                                term=term,
+                                prev_log_term=logs[-1].term if logs else 0,
+                                prev_log_idx=len(logs) - 1,
+                                entries=logs,
+                                commit=commit_idx)
+                            )
+                            # print(response.success)
+                            ack += response.success
+                            # TODO: local logging
+                            channel.close()
                     except Exception as e:
+                        # print(e)
                         # TODO: local logging
                         pass
                 # If ACK successful
-                if ack > n_servers // 2:
+                if ack >= n_servers // 2:
                     # Commit change --> move forward index
                     commit_idx = len(logs) - 1
                 else:
                     # Lose leader role
+                    print("Lost leader", ack)
                     role = Role.FOLLOWER
                     leader_addr = None
                     # TODO: local logging
