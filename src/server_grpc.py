@@ -350,6 +350,7 @@ class RaftService(handler_pb2_grpc.RaftServicer):
     Basic Raft implementation for leader election and log replication
     """
     def Vote(self, request, context):
+        """Vote in favor or or against depending on candidate logs"""
         global term, voted_for, leader_addr
         logging.info(f"[RAFT] Received VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, prev_log_idx: {request.prev_log_idx}, prev_log_term: {request.prev_log_term}")
 
@@ -446,11 +447,11 @@ def serve():
             if role == Role.FOLLOWER:
                 # If no leader heartbeat: trigger election (will automatically call AppendEntries upon receiving)
                 if time.time() - last_heartbeat > HEARTBEAT_LEN:
-                    logging.info(f"[RAFT] Election | term: {term}")
                     term += 1
                     voted_for = None
                     # leader_addr = None
                     role = Role.CANDIDATE
+                    logging.info(f"[RAFT] Election | term: {term}")
             elif role == Role.CANDIDATE:
                 if time.time() > timer:
                     # Reset timer
@@ -482,6 +483,7 @@ def serve():
                     if votes_recv > n_servers // 2:
                         role = Role.LEADER
                         leader_addr = f"{host}:{port}"
+
                         logging.info(f"[RAFT] Won election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
                         # TODO: broadcast to all other servers + client?
 
