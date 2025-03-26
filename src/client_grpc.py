@@ -62,20 +62,6 @@ class GRPCClient:
         self.stop_event = threading.Event()
         self.receiver_thread = None
 
-    def _failover_to_leader(self, new_leader_addr):
-        """Connect to the new leader given that we are connected to the wrong server"""
-
-        print(f"Failing over to new leader at {new_leader_addr}")
-        self.channel.close()
-        self.channel = grpc.insecure_channel(f"{new_leader_addr[0]}:{new_leader_addr[1]}")
-        self.stub = handler_pb2_grpc.HandlerStub(self.channel)
-
-    def _find_new_leader(self):
-        """Continues to ping the servers until the new leader's address provided"""
-
-        response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
-        return response.new_leader_id - 1
-
     def _start_stream(self):
         if self.receiver_thread is not None:
             return
@@ -95,16 +81,52 @@ class GRPCClient:
         except grpc.RpcError as e:
             return
         
+    def _failover_to_leader(self, new_leader_addr):
+        """Connect to the new leader given that we are connected to the wrong server"""
+
+        print(f"Failing over to new leader at {new_leader_addr}")
+        self.channel.close()
+        self.channel = grpc.insecure_channel(f"{new_leader_addr[0]}:{new_leader_addr[1]}")
+        self.stub = handler_pb2_grpc.HandlerStub(self.channel)
+
+    def _find_new_leader(self):
+        """Continues to ping the servers until the new leader's address provided"""
+
+        while not self.stop_event.is_set():
+            try:
+                # Send Status request to the current server
+                response = self.stub.Status(handler_pb2.Empty())
+
+                if response.role == "LEADER": #TODO: Use variable instead
+                    print(f"Found leader: {response.current_leader_id}")
+                    self.leader_id = response.current_leader_id
+                    break  # Exit loop once the leader is found
+                
+                print(f"Not the leader, retrying to find the leader...")
+            
+            except RpcError as e:
+                print(f"Error while trying to find leader: {e}")
+                print("Retrying to find the leader...")
+
+            # Sleep before retrying
+            time.sleep(POLL_INTERVAL)
+
+        response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
+        return response.new_leader_id
+        
     def poll_leader(self):
         """Background thread that checks that the client is still connected to an active leader"""
+
         while not self.stop_event.is_set():
             try:
                 response = self.stub.Status(handler_pb2.Empty())
-                if self.leader_id != (response.current_leader_id - 1): 
+                if response.role != "LEADER": #TODO: Change to variable role 
                     print(f"Current server is not leader!")
                     
                     #Assumes that the servers will find the next leader 
-                    self._failover_to_leader(self.live_servers[response.current_leader_id - 1])
+                    self._failover_to_leader(self.live_servers[response.current_leader_id])
+                else:
+                    print(f"Connected to leader: {response.current_leader_id}")
             except RpcError as e:
                 print(f"Lost connection to leader: {e}")
                 self._find_new_leader()
@@ -631,11 +653,14 @@ class ChatGUI:
 # -----------------------------------------------------------------------------
 
 def main(args):
-    live_servers = args.live_servers
-    leader_id = args.leader_id
+
+    host = args.host
+    port = args.port
+
+    LIVE_SERVERS.insert(LEADER_ID, (host, port))
 
     # Set up grpc object (client stub)
-    grpc_client = GRPCClient(live_servers, leader_id)
+    grpc_client = GRPCClient(LIVE_SERVERS, LEADER_ID)
 
     # Set up client GUI
     root = tk.Tk()
@@ -655,10 +680,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--host", default=HOST)
-    # parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--live_servers", default=LIVE_SERVERS)
-    parser.add_argument("--leader_id", default=LEADER_ID)
+    parser.add_argument("--host", default=HOST)
+    parser.add_argument("--port", type=int, default=PORT)
 
     args = parser.parse_args()
 
