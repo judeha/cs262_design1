@@ -1,6 +1,8 @@
 import sqlite3
 from enum import Enum
 import struct
+import handler_pb2
+import handler_pb2_grpc
 
 class ResponseCode(Enum):
     """Enumeration of server response codes."""
@@ -40,7 +42,57 @@ class OpCode(Enum):
     RECEIVE_MSG = 11
     MATCH = 12
 
-# Dictionary mapping Python types to type codes
+def apply_action(request, db_path):
+    """Apply a write action to local database upon request from leader"""
+
+    # Import inside to avoid circular import error
+    from database import DatabaseHandler
+    db = DatabaseHandler(db_path)
+    if request.action == OpCode.CREATE_ACCOUNT:
+        db.create_account(request.username, request.password, request.bio)
+    elif request.action == OpCode.DELETE_ACCOUNT:
+        db.delete_account(request.username)
+    elif request.action == OpCode.DELETE_MSG:
+        db.delete_messages(request.username, request.message_id_lst)
+    elif request.action == OpCode.READ_MSG_UNDELIVERED:
+        db.fetch_messages_undelivered(request.username, request.num)
+    elif request.action == OpCode.SEND_MSG:
+        pass
+    elif request.action == OpCode.RECEIVE_MSG:
+        pass
+    elif request.action == OpCode.CONNECT:
+        pass
+    else:
+        raise ValueError(f"Unknown action code: {request.action}")
+
+    pass
+
+def database_setup(db_path):
+    """Creates the database and tables if they don't exist."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Create table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS accounts (
+                   id INTEGER PRIMARY KEY,
+                   username TEXT NOT NULL,
+                   password TEXT NOT NULL,
+                   bio TEXT,
+                   bio_embedding BLOB)''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
+                   id INTEGER PRIMARY KEY,
+                   sender TEXT NOT NULL,
+                   receiver TEXT NOT NULL,
+                   content TEXT,
+                   timestamp INTEGER,
+                   delivered INTEGER)''')
+
+    # Save (commit) the changes
+    conn.commit()
+    conn.close()
+
+# Dictionary mapping Python types to type codes NOTE: deprecated
 TypeCode = {
     'int': 0,
     'str': 1,
@@ -49,7 +101,7 @@ TypeCode = {
     'tuple': 4
 }
 
-# Dictionary mapping type codes to struct format strings
+# Dictionary mapping type codes to struct format strings NOTE: deprecated
 TypeCode2 = {
     0: '>I',
     1: '>s',
@@ -58,6 +110,7 @@ TypeCode2 = {
 
 def encode_protocol(arg_lst):
     """Recursively encodes complex structures (lists, tuples) into bytes."""
+    # NOTE: deprecated
     encoded = b''
 
     def encode_value(value):
@@ -81,6 +134,7 @@ def encode_protocol(arg_lst):
 
 def decode_protocol(bytes_str):
     """Recursively decodes bytes into structured data (lists, tuples, and primitives)."""
+    # NOTE: deprecated
     decoded = []
 
     def decode_value(byte_data):
@@ -133,28 +187,3 @@ def decode_protocol(bytes_str):
             decoded.append(value)
 
     return decoded
-
-def database_setup(db_path):
-    """Creates the database and tables if they don't exist."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    # Create table
-    cursor.execute('''CREATE TABLE IF NOT EXISTS accounts (
-                   id INTEGER PRIMARY KEY,
-                   username TEXT NOT NULL,
-                   password TEXT NOT NULL,
-                   bio TEXT,
-                   bio_embedding BLOB)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
-                   id INTEGER PRIMARY KEY,
-                   sender TEXT NOT NULL,
-                   receiver TEXT NOT NULL,
-                   content TEXT,
-                   timestamp INTEGER,
-                   delivered INTEGER)''')
-
-    # Save (commit) the changes
-    conn.commit()
-    conn.close()
