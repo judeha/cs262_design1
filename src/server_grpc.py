@@ -18,20 +18,21 @@ import sys
 yaml_path = "config.yaml"
 with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
-
-# Get values from config
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
+
+# Load server configuration
 idx = int(sys.argv[1])
 server_config = config.get("servers")[idx]
 host = server_config.get("host", "localhost")
 port = server_config.get("port", 65432)
-DB_PATH = server_config.get("db_path", f"data/s{idx}.db")
-LOG_PATH = server_config.get("log_path", f"logs/s{idx}.log")
+DB_PATH = server_config['db_path']
+LOG_PATH = server_config['log_path']
 
 # Global variables
 active_clients = {} # Active clients mapping (username -> socket)
 lock = threading.Lock()
+
 # Initialize local logging
 logging.basicConfig(
     filename=LOG_PATH,
@@ -42,7 +43,6 @@ logging.basicConfig(
 logging.info("Server started")
 logging.info(f"Host: {host}")
 logging.info(f"Port: {port}")
-
 
 # Initialize the database
 database_setup(DB_PATH)
@@ -69,12 +69,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     Handles standard communication between the server and a client using JSON encoding. Message is (fuzzily) equivalent to a server-stub.
     """
     def __init__(self):
-        # self.db = DatabaseHandler(DB_PATH)
-        # Active clients mapping (username -> Message object)
         global active_clients, logs
         self.db_path = DB_PATH
-
-        # logging.info(f"New connection established: {addr}")
 
     def set_path(self, path):
         self.db_path = path
@@ -229,48 +225,6 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     
         return response
     
-    # def SendMessage(self, request, context):
-    #     db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-    #     # Process the request
-    #     response = handler_pb2.SendMessageResponse()
-    #     sender = request.sender
-    #     receiver = request.receiver
-    #     msg_content = request.content
-    #     timestamp = round(time.time())
-        
-    #     request.timestamp = timestamp
-    #     logs.append(handler_pb2.Entry(send_msg=request))
-
-    #     with lock:
-    #         delivered = receiver in active_clients
-
-    #     # Insert the message into the database
-    #     result = db.insert_message(sender, receiver, msg_content, timestamp, delivered)
-
-    #     # Create SendMessageResponse for the sender
-    #     response.status_code = result["status_code"]
-
-    #     # If receiver online: try sending immediately
-    #     if response.status_code == ResponseCode.SUCCESS.value and delivered:
-    #         try:
-    #             # Create a ReceiveMessageResponse for the receiver
-    #             msg = handler_pb2.Message(
-    #                 id=result["data"][0],
-    #                 sender=sender,
-    #                 receiver=receiver,
-    #                 content=msg_content,
-    #                 timestamp=timestamp,
-    #                 delivered=delivered
-    #             )
-    #             # Send the message to the receiver
-    #             with lock:
-    #                 active_clients[receiver].put(msg)
-
-    #         except Exception as e:
-    #             print("Error sending message:", e)
-
-    #     return response
-    
     def SendMessage(self, request_iterator, context):
         db = DatabaseHandler(self.db_path)
         delivered_count = 0
@@ -353,6 +307,8 @@ class RaftService(handler_pb2_grpc.RaftServicer):
     def Vote(self, request, context):
         global term, voted_for, leader_addr
         # TODO: local logging
+
+        # If candidate is behind me, reject
         if request.cand_term < term or voted_for is None:
             return handler_pb2.VoteResponse(term=term, success=False)
         # If candidate is ahead of me, vote for them + update my term
@@ -367,14 +323,12 @@ class RaftService(handler_pb2_grpc.RaftServicer):
         global leader_addr, logs, DB_PATH, timer, role, voted_for, last_heartbeat
         # TODO: implement checks if role is Role.LEADER
         # TODO: local logging
+
         voted_for = None
-        timer = time.time() + random.uniform(0.3, 0.5) # NOTE: should this be +3 everytime?
+        timer = time.time() + random.uniform(0, 0.5)
         last_heartbeat = time.time()
 
-        if role == "LEADER":
-            pass
-            # TODO: local logging
-        role = "FOLLOWER"
+        role = Role.FOLLOWER # NEW
 
         # 1) Update leader_addr?
         if request.leader_addr != leader_addr:
@@ -388,6 +342,7 @@ class RaftService(handler_pb2_grpc.RaftServicer):
             logs.append(entry)
             apply_action(entry, DB_PATH)
         return handler_pb2.AppendEntriesResponse(term=request.term, success=True)
+    
     def GetLeader(self, request, context):
         global leader_addr
         return handler_pb2.GetLeaderResponse(leader_addr=leader_addr)
@@ -429,7 +384,7 @@ def serve():
     # Take actions based on role
     try:
         while True:
-            print(leader_addr)
+            print("Here", role, leader_addr)
             if role == Role.FOLLOWER:
                 # If no leader heartbeat: trigger election (will automatically call AppendEntries upon receiving)
                 # if time.time() > timer:
@@ -437,6 +392,7 @@ def serve():
                     # TODO: local logging
                     term += 1
                     voted_for = None
+                    leader_addr = None
                     role = Role.CANDIDATE
                     # timer = time.time() + random.uniform(1.0, 2.0)
 
