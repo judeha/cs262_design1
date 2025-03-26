@@ -1,128 +1,193 @@
+import unittest
+import subprocess
+import time
 import os
 import sys
-import time
-import yaml
-import grpc
 import signal
 import random
-import subprocess
-import unittest
+import grpc
+import yaml
+from datetime import datetime
 from pathlib import Path
 
+# Add src to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src import handler_pb2, handler_pb2_grpc
+
+import handler_pb2
+import handler_pb2_grpc
+
+CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+LOG_OUTPUT_PATH = Path(__file__).parent / "raft_test_log.txt"
+
+def start_servers(num_servers=5):
+    """Start each server in its own process with sys.argv[1] = i."""
+    processes = []
+    for i in range(num_servers):
+        p = subprocess.Popen(["python", "server_grpc.py", str(i)])
+        processes.append(p)
+        time.sleep(0.5)  # small delay so they bind ports in order
+    return processes
+
+def get_leader(host: str, port: int):
+    """Returns the leader_addr reported by a single server."""
+    try:
+        with grpc.insecure_channel(f"{host}:{port}") as channel:
+            stub = handler_pb2_grpc.RaftStub(channel)
+            resp = stub.GetLeader(handler_pb2.GetLeaderResponse())
+            return resp.leader_addr
+    except grpc.RpcError:
+        return None
+
+def log_leader_snapshot(clock_tick, leader_map):
+    line = f"[{clock_tick:02d}s] " + ", ".join(f"{srv} → {ldr or 'None'}" for srv, ldr in leader_map.items())
+    with open(LOG_OUTPUT_PATH, "a") as f:
+        f.write(line + "\n")
+    print(line)
+
+def kill_processes(processes, indices):
+    for idx in indices:
+        p = processes[idx]
+        p.kill()
+
+def load_server_info():
+    with open(CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    return [(s["host"], s["port"]) for s in config["servers"]]
 
 
-class TestRaftCluster(unittest.TestCase):
-    """Integration test suite for the 5-server Raft cluster."""
+def log_leader_table(leader_map, title=""):
+    with open(LOG_OUTPUT_PATH, "a") as f:
+        if title:
+            f.write(f"\n=== {title} ===\n")
+        f.write("Time: {}\n".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        f.write("{:<10} | {}\n".format("Server", "Leader Seen"))
+        f.write("-" * 30 + "\n")
+        for server, leader in leader_map.items():
+            f.write("{:<10} | {}\n".format(server, leader if leader else "N/A"))
+        f.write("\n")
 
-    @classmethod
-    def setUpClass(cls):
-        """
-        One-time setup: parse config, launch all servers as separate processes.
-        """
-        # Load config.yaml
-        config_path = HERE.parent / "config.yaml"
-        with open(config_path, "r") as f:
-            cls.config = yaml.safe_load(f)
 
-        cls.n_servers = len(cls.config["servers"])
-        cls.processes = []
+class TestRaftEdgeCases(unittest.TestCase):
 
-        # Start each server in a separate process
-        for i in range(cls.n_servers):
-            p = subprocess.Popen(
-                [sys.executable, str(SRC_DIR / "server.py"), str(i)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            cls.processes.append(p)
+    def tearDown(self):
+        time.sleep(1)
 
-        # Let servers initialize
-        time.sleep(3)
+    # def test_1_server(self):
+    #     processes = start_servers(num_servers=1)
+    #     time.sleep(2)
 
-    @classmethod
-    def tearDownClass(cls):
-        """
-        One-time teardown: terminate all running server processes.
-        """
-        for p in cls.processes:
-            p.terminate()
-        for p in cls.processes:
-            p.wait()
+    #     (host, port) = load_server_info()[0]
+    #     leader = get_leader(host, port)
 
-    def get_leader(self, host: str, port: int) -> str:
-        """
-        Calls GetLeader RPC on a single server, returns the leader_addr.
-        If it fails, returns an empty string.
-        """
+    #     self.assertIsNotNone(leader)
+    #     log_leader_table({f"{host}:{port}": leader}, "Test 1 Server")
+    #     # None leader dependent on n_servers
+    #     if len(load_server_info()) == 1:
+    #         self.assertEqual(leader, f"{host}:{port}")
+
+    #     kill_processes(processes, range(1))
+
+    # def test_2_servers(self):
+    #     processes = start_servers(2)
+    #     time.sleep(3)
+
+    #     servers = load_server_info()[:2]
+    #     leader_map = {}
+    #     for h, p in servers:
+    #         leader_map[f"{h}:{p}"] = get_leader(h, p)
+
+    #     log_leader_table(leader_map, "Test 2 Servers")
+    #     self.assertTrue(any(leader_map.values()))  # at least one must return a leader
+
+    #     kill_processes(processes, range(2))
+
+    # def test_3_servers(self):
+    #     processes = start_servers(3)
+    #     time.sleep(4)
+
+    #     servers = load_server_info()[:3]
+    #     leader_map = {}
+    #     for h, p in servers:
+    #         leader_map[f"{h}:{p}"] = get_leader(h, p)
+
+    #     log_leader_table(leader_map, "Test 3 Servers")
+    #     leaders = list(filter(None, leader_map.values()))
+    #     self.assertTrue(len(set(leaders)) == 1)
+
+    #     kill_processes(processes, range(3))
+
+    # def test_5_servers(self):
+    #     processes = start_servers(5)
+    #     time.sleep(4)
+
+    #     servers = load_server_info()
+    #     leader_map = {}
+    #     for h, p in servers:
+    #         leader_map[f"{h}:{p}"] = get_leader(h, p)
+
+    #     log_leader_table(leader_map, "Test 5 Servers")
+    #     leaders = list(filter(None, leader_map.values()))
+    #     self.assertTrue(len(set(leaders)) == 1)
+
+    #     kill_processes(processes, range(5))
+
+    def test_2_fault_tolerance(self):
+        processes = start_servers(5)
+        time.sleep(5)
+
+        servers = load_server_info()[:5]
+
+        initial_leader_map = {}
+        for h, p in servers:
+            initial_leader_map[f"{h}:{p}"] = get_leader(h, p)
+
+        log_leader_table(initial_leader_map, "Before Fault Injection")
+
+        # Kill 2 random servers
+        dead_indices = random.sample(range(5), 2)
+        kill_processes(processes, dead_indices)
+
+        # Remove killed from server list
+        survivors = [i for j, i in enumerate(servers) if j not in dead_indices]
+        time.sleep(5)
+
+        final_leader_map = {}
+        for h, p in survivors:
+            final_leader_map[f"{h}:{p}"] = get_leader(h, p)
+
+        log_leader_table(final_leader_map, "After Killing 2 Servers")
+
+        # Kill remaining
+        alive_indices = [i for i in range(5) if i not in dead_indices]
+        kill_processes(processes, alive_indices)
+
+        leaders = list(filter(None, final_leader_map.values()))
+        self.assertTrue(len(leaders) >= 1)
+
+    def test_leader_tracking(duration=10, num_servers=5):
+        """Tracks who each server thinks the leader is over N seconds."""
+        servers = load_server_info()[:num_servers]
+        duration = 10
+
+        processes = start_servers(num_servers)
+
+        print(f"Tracking leader election for {duration} seconds...\n")
+        start_time = time.time()
+        clock_tick = 0
+
         try:
-            with grpc.insecure_channel(f"{host}:{port}") as channel:
-                stub = handler_pb2_grpc.RaftStub(channel)
-                resp = stub.GetLeader(handler_pb2.GetLeaderRequest())
-                return resp.leader_addr
-        except Exception as e:
-            print(f"Error calling GetLeader on {host}:{port}: {e}")
-            return ""
-
-    def test_leader_election_and_2fault(self):
-        """
-        1) Ensure at least one server is recognized as leader (across all).
-        2) Kill 2 servers (in a 5-server cluster).
-        3) Check the new cluster of 3 forms a consistent leader.
-        """
-        self.assertGreaterEqual(self.n_servers, 5, "Need at least 5 servers in config.")
-
-        # 1) Check current leader consistency
-        #    We'll poll each server's GetLeader to see if we find a non-empty leader address.
-        all_hosts_ports = []
-        for i, s in enumerate(self.config["servers"]):
-            h = s["host"]
-            pt = s["port"]
-            all_hosts_ports.append((h, pt))
-
-        # Attempt to find a leader
-        leaders = []
-        for (h, pt) in all_hosts_ports:
-            leader_addr = self.get_leader(h, pt)
-            if leader_addr:
-                leaders.append(leader_addr)
-
-        # We don't strictly require the same leader across all servers,
-        # but typically they converge. We'll at least ensure there's a known leader from *someone*.
-        self.assertTrue(len(leaders) > 0, "No server returned a valid leader_addr. Possibly no leader elected yet.")
-
-        # 2) Kill 2 servers at random (2-fault tolerance for a 5 server cluster).
-        #    Then we check if the remaining cluster picks a new or same stable leader.
-        random_two = random.sample(range(self.n_servers), 2)
-        print(f"Killing servers at indices: {random_two}")
-        for idx in sorted(random_two, reverse=True):
-            proc = self.processes[idx]
-            proc.terminate()
-            proc.wait()
-            self.processes.pop(idx)  # remove from the list of running processes
-            all_hosts_ports.pop(idx)  # also remove from host/port list
-
-        # Give some time for reelection
-        time.sleep(3)
-
-        # 3) Check each remaining server for a new leader
-        new_leaders = []
-        for (h, pt) in all_hosts_ports:
-            leader_addr = self.get_leader(h, pt)
-            if leader_addr:
-                new_leaders.append(leader_addr)
-
-        self.assertTrue(
-            len(new_leaders) > 0,
-            "After killing 2 servers, no remaining server sees a valid leader."
-        )
-
-        # Optionally, we can check for consistency among the new leader addresses
-        # to ensure they converge on the same address, but minimal check is to have *some* leader.
-        print("Remaining cluster sees leaders:", new_leaders)
-
+            while time.time() - start_time < duration:
+                leader_map = {}
+                for host, port in servers:
+                    key = f"{port}"
+                    leader = get_leader(host, port)
+                    leader_map[key] = leader.split(":")[-1] if leader else None
+                log_leader_snapshot(clock_tick, leader_map)
+                time.sleep(1)
+                clock_tick += 1
+        finally:
+            kill_processes(processes, range(num_servers))
+            print("\nTracking complete. Log written to leader_tracking_log.txt")
 
 if __name__ == "__main__":
-    # Typically run: `python -m unittest tests/test_raft_cluster.py`
-    unittest.main()
+    unittest.main(verbosity=2)

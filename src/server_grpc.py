@@ -27,20 +27,21 @@ idx = int(sys.argv[1])
 server_config = config.get("servers")[idx]
 host = server_config.get("host", "localhost")
 port = server_config.get("port", 65432)
-DB_PATH = server_config['db_path']
-LOG_PATH = server_config['log_path']
+DB_PATH = server_config.get('db_path', "../data/s{idx}.db")
+LOG_PATH = server_config.get('log_path', "../log/s{idx}.log")
 
 # Global variables
 active_clients = {} # Active clients mapping (username -> socket)
 lock = threading.Lock()
 
 # Initialize local logging
-logging.basicConfig(
-    filename=LOG_PATH,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+f_handle = logging.FileHandler(LOG_PATH)
+# format
+f_handle.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(f_handle)
+
 logging.info(f"[START] server {idx} at {host}:{port}")
 
 # Initialize the database
@@ -353,15 +354,14 @@ class RaftService(handler_pb2_grpc.RaftServicer):
         logging.info(f"[RAFT] Received VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, prev_log_idx: {request.prev_log_idx}, prev_log_term: {request.prev_log_term}")
 
         # If candidate is behind me, reject
-        if request.cand_term < term or voted_for is None:
-            logging.info(f"[RAFT] Rejected VoteRequest | cand_term: {request.cand_term}, term: {term}")
+        if request.cand_term < term or voted_for is None: # TODO: check
+            logging.info(f"[RAFT] Rejected VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, term: {term}")
             return handler_pb2.VoteResponse(term=term, success=False)
         # If candidate is ahead of me, vote for them + update my term
         if request.cand_term >= term:
-            logging.info(f"[RAFT] Accepted VoteRequest | cand_term: {request.cand_term}, term: {term}")
+            logging.info(f"[RAFT] Accepted VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, term: {term}")
             term = request.cand_term
             voted_for = request.cand_id
-            leader_addr = None
             return handler_pb2.VoteResponse(term=term, success=True)
 
     def AppendEntries(self, request, context):
@@ -416,6 +416,7 @@ def serve():
     handler_pb2_grpc.add_RaftServicer_to_server(RaftService(), server)
     server.add_insecure_port(f'{host}:{port}')
     server.start()
+    time.sleep(0.5)  # Give time for the socket to bind
 
     # Connect to all other servers + elect leader
     for s in all_servers:
@@ -448,7 +449,7 @@ def serve():
                     logging.info(f"[RAFT] Election | term: {term}")
                     term += 1
                     voted_for = None
-                    leader_addr = None
+                    # leader_addr = None
                     role = Role.CANDIDATE
             elif role == Role.CANDIDATE:
                 if time.time() > timer:
@@ -483,6 +484,30 @@ def serve():
                         leader_addr = f"{host}:{port}"
                         logging.info(f"[RAFT] Won election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
                         # TODO: broadcast to all other servers + client?
+
+                        for s in all_servers:
+                            try:
+                                if s == f"{host}:{port}":
+                                    last_heartbeat = time.time()
+                                    continue
+                                channel = grpc.insecure_channel(s)
+                                stub = handler_pb2_grpc.RaftStub(channel)
+                                # Send out all logs TODO: optimize to just send snapshot
+                                response = stub.AppendEntries(handler_pb2.AppendEntriesRequest(
+                                    leader_addr=leader_addr,
+                                    term=term,
+                                    prev_log_term=logs[-1].term if logs else 0,
+                                    prev_log_idx=len(logs) - 1,
+                                    entries=logs,
+                                    commit=commit_idx
+                                    )
+                                )
+                                channel.close()
+                                logging.info(f"[RAFT] Sent heartbeat | server: {s}, success: {response.success}")
+                            except Exception as e:
+                                logging.error(f"[RAFT] Sent heartbeat erro | server: {s}, error: {e}")
+                                pass
+
                     else:
                         logging.info(f"[RAFT] Lost election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
             elif role == Role.LEADER:
@@ -490,6 +515,9 @@ def serve():
                 ack = 0
                 for s in all_servers:
                     try:
+                        if s == f"{host}:{port}":
+                            last_heartbeat = time.time()
+                            continue
                         channel = grpc.insecure_channel(s)
                         stub = handler_pb2_grpc.RaftStub(channel)
                         # Send out all logs TODO: optimize to just send snapshot
