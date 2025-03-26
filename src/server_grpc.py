@@ -7,7 +7,6 @@ import os
 import threading
 import server_handler
 from utils import database_setup
-
 import io
 import json
 import yaml
@@ -172,7 +171,6 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             response.msg_lst.extend(data)
         # return self.FetchHomepage(request.username)
         return response
-
 
     def DeleteMessage(self, request, context):
         db = DatabaseHandler(DB_PATH)  # Create fresh DB instance

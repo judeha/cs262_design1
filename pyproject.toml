@@ -7,4 +7,6 @@ python_requires = ">=3.11"
 dependencies = [
     "pyyaml",
     "sentence-transformers",
+    "pytest",
+    "grpc",
 ]

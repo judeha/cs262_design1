@@ -2,7 +2,9 @@ syntax = "proto3";
 
 // gRPC service definition
 service Handler {
+    rpc Status(Empty) returns (currentLeaderResponse);
     rpc Ending(EndingRequest) returns (EndingResponse);
+    rpc NewLeader(NewLeaderRequest) returns (NewLeaderResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -14,6 +16,21 @@ service Handler {
     rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse);
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
     rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse);
+}
+
+message NewLeaderRequest{
+    int32 leader_id = 0;
+}
+
+message NewLeaderResponse{
+    int32 new_leader_id = 0;
+    string role = 0;
+    int32 status_code = 1;
+}
+
+message currentLeaderResponse{
+    int32 current_leader_id = 0;
+    int32 role = 1;
 }
 
 // Message for Ending

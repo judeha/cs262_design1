@@ -12,6 +12,7 @@ import random
 import grpc
 import handler_pb2
 import handler_pb2_grpc
+from grpc import RpcError
 
 # Configure logging
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -28,21 +29,27 @@ BTN_TXT_COLOR = config['btn_txt_color']
 BTN_BG_COLOR = config['btn_bg_color']
 HOST = config['host']
 PORT = config['port']
+LIVE_SERVERS = config['live_servers']
+LEADER_ID = config['leader_id']
 PROTOCOL = config['protocol']
 UI_DIMENSIONS = config['ui_dimensions']
 CONTENT_ENCODING = config['encoding']
 EMOJIS = config['emojis']
 MAX_VIEW = config["max_view"]
+POLL_INTERVAL = 3
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages receiving messages
 # -----------------------------------------------------------------------------
 class GRPCClient:
-    def __init__(self, host, port):
+    def __init__(self, live_servers, leader_id):
         """Initialize the gRPC client and start a background thread for receiving messages."""
-        self.channel = grpc.insecure_channel(f"{host}:{port}")
-        self.stub = handler_pb2_grpc.HandlerStub(self.channel)
 
+        self.live_servers = live_servers
+        self.leader_id = leader_id
+
+        self.channel = grpc.insecure_channel(self.live_servers[leader_id])
+        self.stub = handler_pb2_grpc.HandlerStub(self.channel)
         self.username = None
 
         # Queue for incoming messages (thread-safe)
@@ -51,6 +58,33 @@ class GRPCClient:
         # Start the background thread for receiving messages
         self.stop_event = threading.Event()
         self.receiver_thread = None
+
+    def _poll_leader(self):
+        """Background thread that checks that the client is still connected to an active leader"""
+        while not self.stop_event.is_set():
+            try:
+                response = self.stub.Status(handler_pb2.Empty())
+                if self.leader_id != response.current_leader_id: 
+                    print(f"Current server is not leader!")
+                    self.failover_to_leader(self.live_servers[response.current_leader_id])
+            except RpcError as e:
+                print(f"Lost connection to leader: {e}")
+                self.find_new_leader()
+            time.sleep(POLL_INTERVAL)
+
+    def _failover_to_leader(self, new_leader_addr):
+        """Connect to the new leader given that we are connected to the wrong server"""
+
+        print(f"Failing over to new leader at {new_leader_addr}")
+        self.channel.close()
+        self.channel = grpc.insecure_channel(new_leader_addr)
+        self.stub = handler_pb2_grpc.HandlerStub(self.channel)
+
+    def _find_new_leader(self):
+        """Continues to ping the servers until the new leader's address provided"""
+
+        response = self.stub.NewLeader(handler_pb2.NewLeaderRequest(leader_id=self.leader_id))
+        return response.new_leader_id
 
     def _start_stream(self):
         if self.receiver_thread is not None:
@@ -592,11 +626,14 @@ class ChatGUI:
 # -----------------------------------------------------------------------------
 
 def main(args):
-    host = args.host
-    port = args.port
+    # host = args.host
+    # port = args.port
+    live_servers = args.live_servers
+    leader_id = args.leader_id
 
     # Set up grpc object (client stub)
-    grpc_client = GRPCClient(host, port)
+
+    grpc_client = GRPCClient(live_servers, leader_id)
 
     # Set up client GUI
     root = tk.Tk()
@@ -614,8 +651,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default=HOST)
-    parser.add_argument("--port", type=int, default=PORT)
+    # parser.add_argument("--host", default=HOST)
+    # parser.add_argument("--port", type=int, default=PORT)
+    parser.add_argument("--live_servers", default=LIVE_SERVERS)
+    parser.add_argument("--leader_id", default=LEADER_ID)
+
     args = parser.parse_args()
 
     main(args)
