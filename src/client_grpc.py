@@ -134,11 +134,15 @@ class GRPCClient:
 
     def send_message(self, receiver, content):
         """Send a message (unary call)."""
-        if not self.username:
-            return
-        req = handler_pb2.SendMessageRequest(sender=self.username, receiver=receiver, content=content)
-        resp = self.stub.SendMessage(req)
-        return resp
+        try:
+            if not self.username:
+                return
+            req = handler_pb2.SendMessageRequest(sender=self.username, receiver=receiver, content=content)
+            resp = self.stub.SendMessage(req)
+            return resp
+        except:
+            # TODO: call find_new_leader for all unary actions.
+            pass
 
     def get_new_messages(self):
         """Retrieve any messages from the local queue."""
@@ -666,6 +670,7 @@ def main(args):
     root = tk.Tk()
     app = ChatGUI(root, grpc_client)
 
+    #Replication!
     grpc_client.poll_leader()
 
     # Define close loop
