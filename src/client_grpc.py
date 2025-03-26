@@ -13,6 +13,7 @@ import grpc
 import handler_pb2
 import handler_pb2_grpc
 from grpc import RpcError
+import sys
 
 # Configure logging
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -22,21 +23,17 @@ yaml_path = "config.yaml"
 with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 
+LIVE_SERVERS = config['servers']
+LEADER_ID = int(sys.argv[1]) # initial leader
 
-# Defaults
+POLL_INTERVAL = 3
 BG_COLOR = config['bg_color']
 BTN_TXT_COLOR = config['btn_txt_color']
 BTN_BG_COLOR = config['btn_bg_color']
-HOST = config['host']
-PORT = config['port']
-LIVE_SERVERS = config['live_servers']
-LEADER_ID = config['leader_id']
-PROTOCOL = config['protocol']
 UI_DIMENSIONS = config['ui_dimensions']
 CONTENT_ENCODING = config['encoding']
 EMOJIS = config['emojis']
 MAX_VIEW = config["max_view"]
-POLL_INTERVAL = 3
 
 # -----------------------------------------------------------------------------
 # Background Thread: manages receiving messages
@@ -48,8 +45,8 @@ class GRPCClient:
         self.live_servers = live_servers
         self.leader_id = leader_id
 
-        self.host = live_servers[leader_id][0]
-        self.port = live_servers[leader_id][1]
+        self.host = live_servers[leader_id]['host']
+        self.port = live_servers[leader_id]['port']
 
         self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
@@ -676,13 +673,7 @@ class ChatGUI:
 # Main Client Launcher
 # -----------------------------------------------------------------------------
 
-def main(args):
-
-    host = args.host
-    port = args.port
-
-    LIVE_SERVERS.insert(LEADER_ID, (host, port))
-
+def main():
     # Set up grpc object (client stub)
     grpc_client = GRPCClient(LIVE_SERVERS, LEADER_ID)
 
@@ -704,10 +695,10 @@ def main(args):
     root.mainloop()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default=HOST)
-    parser.add_argument("--port", type=int, default=PORT)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--host", default=HOST)
+    # parser.add_argument("--port", type=int, default=PORT)
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
 
-    main(args)
+    main()
