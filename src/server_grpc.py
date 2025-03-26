@@ -356,7 +356,7 @@ class RaftService(handler_pb2_grpc.RaftServicer):
 
         # If candidate is behind me, reject
         if request.cand_term < term or voted_for is None: # TODO: check
-            logging.info(f"[RAFT] Rejected VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, term: {term}")
+            logging.info(f"[RAFT] Rejected VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, term: {term}, voted_for: {voted_for}")
             return handler_pb2.VoteResponse(term=term, success=False)
         # If candidate is ahead of me, vote for them + update my term
         if request.cand_term >= term:
@@ -485,10 +485,11 @@ def serve():
                         leader_addr = f"{host}:{port}"
 
                         logging.info(f"[RAFT] Won election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
-                        # TODO: broadcast to all other servers + client?
 
+                        # Send heartbeat to all other servers
                         for s in all_servers:
                             try:
+                                # Update leader heartbeat but do not send to self
                                 if s == f"{host}:{port}":
                                     last_heartbeat = time.time()
                                     continue
