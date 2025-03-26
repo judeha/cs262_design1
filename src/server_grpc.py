@@ -63,7 +63,7 @@ class Role:
 role: int = Role.FOLLOWER               # initial role
 leader_addr: str = None                 # <host>:<port>, like "localhost:50051"
 voted_for: int = None                   # candidate ID   
-n_servers = len(config.get("servers"))  # number of servers
+n_servers = config.get("n_servers", 5)  # number of servers
 all_servers = [f"{config.get('servers')[i]['host']}:{config.get('servers')[i]['port']}" for i in range(n_servers)]                       # list of all server addresses
 logs = []                               # log of all actions for replication
 term = 0                                # tracks election cycle and log consistency 
