@@ -6,7 +6,8 @@ encoding: "utf-8"
 # Server config
 host: "127.0.0.1"
 port: 65432
-db_path: "messages.db"
+db_path: "data/s0.db"
+log_path: "logs/s0.log"
 
 # Client request limitations
 min_username_len: 1

@@ -18,29 +18,32 @@ yaml_path = "config.yaml"
 with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 
-# Default values from config
+# Get values from config
 DEFAULT_HOST = config.get("host", "127.0.0.1")
 DEFAULT_PORT = config.get("port", 65432)
 DEFAULT_PROTOCOL = config.get("protocol", 0)
-DB_PATH = config.get("db_path", "server.db")
-
-# Active clients mapping (username -> socket)
-active_clients = {}
-lock = threading.Lock()
-
-# Initialize the selector and database
-database_setup(DB_PATH)
-    
-# Load configuration
-yaml_path = "config.yaml"
-with open(yaml_path, "r") as y:
-    config = yaml.safe_load(y)
-
-# Defaults
-VERSION = config["version"]
-DB_PATH = config["db_path"]
+DB_PATH = config.get("db_path", "data/s0.db")
+LOG_PATH = config.get("log_path", "logs/s0.log")
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
+
+# Global variables
+active_clients = {} # Active clients mapping (username -> socket)
+lock = threading.Lock()
+# create log handler
+local_log = logging.getLogger()
+local_log.setLevel(logging.INFO)
+handler = logging.FileHandler(LOG_PATH)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+local_log.addHandler(handler)
+logging.info("Server started")
+logging.info(f"Host: {DEFAULT_HOST}")
+logging.info(f"Port: {DEFAULT_PORT}")
+
+# Initialize the database
+database_setup(DB_PATH)
 
 class HandlerService(handler_pb2_grpc.HandlerServicer):
     """
@@ -59,7 +62,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def Starting(self, request, context):
         response = handler_pb2.StartingResponse()
-        response.status_code = ResponseCode.SUCCESS.valuef
+        response.status_code = ResponseCode.SUCCESS.value
         return response
     
     def CheckAccountExists(self, request, context):
