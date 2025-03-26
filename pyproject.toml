@@ -9,4 +9,6 @@ dependencies = [
     "grpcio",
     "grpcio-tools",
     "sentence-transformers",
+    "pytest",
+    "grpc",
 ]

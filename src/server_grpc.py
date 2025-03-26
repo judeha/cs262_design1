@@ -1,15 +1,22 @@
 import yaml
 import queue
+import os
 import threading
+import server_handler
 from utils import database_setup
+import io
+import json
 import yaml
+import struct
 import time
+import ssl
 import logging
 from database import DatabaseHandler
 from utils import ResponseCode, apply_action
 import handler_pb2
 import handler_pb2_grpc
 from concurrent import futures
+
 import grpc
 import random
 import sys
@@ -80,6 +87,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     def Starting(self, request, context):
         """Ping to verify connection"""
         response = handler_pb2.StartingResponse()
+        response.status_code = ResponseCode.SUCCESS.value
         response.status_code = ResponseCode.SUCCESS.value
         return response
     
@@ -318,6 +326,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         username = request.username
         with lock:
             if username not in active_clients:
+                print(active_clients)
                 return
             user_queue = active_clients[username]
 

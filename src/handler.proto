@@ -4,7 +4,9 @@ import "google/protobuf/empty.proto";
 
 // gRPC service definition for client-server
 service Handler {
+    rpc Status(Empty) returns (currentLeaderResponse);
     rpc Ending(EndingRequest) returns (EndingResponse);
+    rpc NewLeader(NewLeaderRequest) returns (NewLeaderResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
