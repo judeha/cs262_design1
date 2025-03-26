@@ -48,7 +48,10 @@ class GRPCClient:
         self.live_servers = live_servers
         self.leader_id = leader_id
 
-        self.channel = grpc.insecure_channel(self.live_servers[leader_id])
+        self.host = live_servers[leader_id][0]
+        self.port = live_servers[leader_id][1]
+
+        self.channel = grpc.insecure_channel(f"{self.host}:{self.port}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
         self.username = None
 
@@ -64,7 +67,7 @@ class GRPCClient:
 
         print(f"Failing over to new leader at {new_leader_addr}")
         self.channel.close()
-        self.channel = grpc.insecure_channel(new_leader_addr)
+        self.channel = grpc.insecure_channel(f"{new_leader_addr[0]}:{new_leader_addr[1]}")
         self.stub = handler_pb2_grpc.HandlerStub(self.channel)
 
     def _find_new_leader(self):
@@ -97,15 +100,16 @@ class GRPCClient:
         while not self.stop_event.is_set():
             try:
                 response = self.stub.Status(handler_pb2.Empty())
-                if self.leader_id != response.current_leader_id: 
+                if self.leader_id != (response.current_leader_id - 1): 
                     print(f"Current server is not leader!")
-                    self.failover_to_leader(self.live_servers[response.current_leader_id])
+                    
+                    #Assumes that the servers will find the next leader 
+                    self._failover_to_leader(self.live_servers[response.current_leader_id - 1])
             except RpcError as e:
                 print(f"Lost connection to leader: {e}")
                 self._find_new_leader()
             time.sleep(POLL_INTERVAL)
 
-        
     def send_message(self, receiver, content):
         """Send a message (unary call)."""
         if not self.username:
@@ -627,13 +631,10 @@ class ChatGUI:
 # -----------------------------------------------------------------------------
 
 def main(args):
-    # host = args.host
-    # port = args.port
     live_servers = args.live_servers
     leader_id = args.leader_id
 
     # Set up grpc object (client stub)
-
     grpc_client = GRPCClient(live_servers, leader_id)
 
     # Set up client GUI
