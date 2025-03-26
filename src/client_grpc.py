@@ -142,6 +142,7 @@ class GRPCClient:
             return resp
         except:
             self._find_new_leader()
+            self._failover_to_leader()
 
     def get_new_messages(self):
         """Retrieve any messages from the local queue."""
@@ -154,6 +155,8 @@ class GRPCClient:
             return messages
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
 
     def stop(self):
         """Gracefully stop the client and close the connection."""
@@ -167,6 +170,8 @@ class GRPCClient:
             return self.stub.CheckAccountExists(handler_pb2.AccountExistsRequest(username=username))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def create_account(self, username, password, bio):
         """Create a new account."""
@@ -175,6 +180,8 @@ class GRPCClient:
             tRequest(username=username, password=password, bio=bio))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def login(self, username, password):
         """Login to the server, creates a queue on the server side."""
@@ -190,6 +197,8 @@ class GRPCClient:
             return resp
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def delete_account(self, username, password):
         """Delete an existing account."""
@@ -197,6 +206,8 @@ class GRPCClient:
             return self.stub.DeleteAccount(handler_pb2.DeleteAccountRequest(username=username, password=password))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def list_accounts(self, pattern=None):
         """List all accounts matching the pattern."""
@@ -204,6 +215,8 @@ class GRPCClient:
             return self.stub.ListAccount(handler_pb2.ListAccountRequest(pattern=pattern))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def delete_messages(self, username, msg_ids):
         """Delete messages by ID."""
@@ -211,6 +224,8 @@ class GRPCClient:
             return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, message_id_lst=msg_ids))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def send_message(self, sender, receiver, content):
         """Send a message to a recipient."""
@@ -218,6 +233,8 @@ class GRPCClient:
             return self.stub.SendMessage(handler_pb2.SendMessageRequest(sender=sender, receiver=receiver, content=content))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def fetch_unread_messages(self, username, num_msgs):
         """Fetch unread messages."""
@@ -225,6 +242,8 @@ class GRPCClient:
             return self.stub.FetchMessageUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num=num_msgs))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def fetch_read_messages(self, username, num_msgs):
         """Fetch read messages."""
@@ -232,6 +251,8 @@ class GRPCClient:
             return self.stub.FetchMessageRead(handler_pb2.FetchMessagesReadRequest(username=username, num=num_msgs))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
     def fetch_homepage(self, username):
         """Fetch the homepage."""
@@ -239,6 +260,8 @@ class GRPCClient:
             return self.stub.FetchHomepage(handler_pb2.FetchHomepageRequest(username=username))
         except:
             self._find_new_leader()
+            self._failover_to_leader()
+
     
 # -----------------------------------------------------------------------------
 # GUI Class: basic chat window
