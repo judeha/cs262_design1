@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
 import argparse
-import socket
 import yaml
-import logging
 import copy
-import selectors
 import threading
 import tkinter as tk
 import time
 import queue
 import hashlib
-from utils import OpCode, ResponseCode, RESPONSE_MESSAGES
-from client_handler import Message, MessageCustom
+from utils import ResponseCode, RESPONSE_MESSAGES
 import random
 import grpc
 import handler_pb2
 import handler_pb2_grpc
-from concurrent import futures
-import google.protobuf.empty_pb2
 
 # Configure logging
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -56,11 +50,7 @@ class GRPCClient:
 
         # Start the background thread for receiving messages
         self.stop_event = threading.Event()
-        # Start background thread for receiving messages
-        # self.receiver_thread = threading.Thread(target=self._receive_messages, daemon=True)
-        # self.receiver_thread.start()
         self.receiver_thread = None
-
 
     def _start_stream(self):
         if self.receiver_thread is not None:
@@ -112,9 +102,6 @@ class GRPCClient:
         """Create a new account."""
         return self.stub.CreateAccount(handler_pb2.CreateAccountRequest(username=username, password=password, bio=bio))
     
-    # def login(self, username, password):
-    #     """Login to an existing account."""
-    #     return self.stub.LoginAccount(handler_pb2.LoginAccountRequest(username=username, password=password))
     def login(self, username, password):
         """Login to the server, creates a queue on the server side."""
         self.username = username

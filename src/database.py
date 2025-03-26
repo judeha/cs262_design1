@@ -3,7 +3,7 @@ from utils import ResponseCode
 from typing import Union
 import yaml
 import logging
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 import numpy as np
 
 # Configure logging
@@ -25,8 +25,8 @@ MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
 MAX_VIEW = config["max_view"]
 
-# Load embedding model
-model = SentenceTransformer('all-MiniLM-L6-v2')  # Fast and accurate
+# # Load embedding model
+# model = SentenceTransformer('all-MiniLM-L6-v2')  # Fast and accurate
 
 class DatabaseHandler():
     """ Database handler class that executes actions given to it by the server.
@@ -70,10 +70,10 @@ class DatabaseHandler():
                 return {"status_code": ResponseCode.ACCOUNT_EXISTS.value}
             # Create account
             cursor.execute("INSERT INTO accounts (username, password, bio) VALUES (?, ?, ?)", (username, password, bio))
-            # Embed bio
-            bio_embedding = model.encode(bio)  # convert bio to vector
-            bio_embedding_blob = bio_embedding.tobytes()  # convert to BLOB object
-            cursor.execute("UPDATE accounts SET bio_embedding = ? WHERE username = ?", (bio_embedding_blob, username))
+            # # Embed bio
+            # bio_embedding = model.encode(bio)  # convert bio to vector
+            # bio_embedding_blob = bio_embedding.tobytes()  # convert to BLOB object
+            # cursor.execute("UPDATE accounts SET bio_embedding = ? WHERE username = ?", (bio_embedding_blob, username))
             conn.commit()
             conn.close()
             return {"status_code": ResponseCode.SUCCESS.value}
@@ -235,54 +235,54 @@ class DatabaseHandler():
             logging.error(f"Database error: {e}")
             return {"status_code": ResponseCode.DATABASE_ERROR.value}
         
-    def match_users(self, username) -> list:
-        """Find the most similar user based on bio using cosine similarity."""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            # Fetch the user's embedding
-            cursor.execute("SELECT bio_embedding FROM accounts WHERE username=?", (username,))
-            my_blob = cursor.fetchone()[0]
-            # Convert BLOB back to NumPy array
-            my_embedding = np.frombuffer(my_blob, dtype=np.float32)
+    # def match_users(self, username) -> list:
+    #     """Find the most similar user based on bio using cosine similarity."""
+    #     try:
+    #         conn = self.get_connection()
+    #         cursor = conn.cursor()
+    #         # Fetch the user's embedding
+    #         cursor.execute("SELECT bio_embedding FROM accounts WHERE username=?", (username,))
+    #         my_blob = cursor.fetchone()[0]
+    #         # Convert BLOB back to NumPy array
+    #         my_embedding = np.frombuffer(my_blob, dtype=np.float32)
 
-            # Fetch all other users' embeddings
-            user_ids, _, bio_vectors = self.get_all_embeddings()
+    #         # Fetch all other users' embeddings
+    #         user_ids, _, bio_vectors = self.get_all_embeddings()
 
-            # Compute cosine similarity
-            similarities = np.dot(bio_vectors, my_embedding) / (np.linalg.norm(bio_vectors, axis=1) * np.linalg.norm(my_embedding))
+    #         # Compute cosine similarity
+    #         similarities = np.dot(bio_vectors, my_embedding) / (np.linalg.norm(bio_vectors, axis=1) * np.linalg.norm(my_embedding))
 
-            # Get the worst match
-            worst_idx = np.argmin(similarities)
-            # Get how much you don't match
-            worst_similarity = round(similarities[worst_idx] * 100)
+    #         # Get the worst match
+    #         worst_idx = np.argmin(similarities)
+    #         # Get how much you don't match
+    #         worst_similarity = round(similarities[worst_idx] * 100)
 
-            # Return the worst match's username and bio
-            cursor.execute("SELECT username, bio FROM accounts WHERE id=?", (user_ids[worst_idx],))
-            worst_match = cursor.fetchone()
+    #         # Return the worst match's username and bio
+    #         cursor.execute("SELECT username, bio FROM accounts WHERE id=?", (user_ids[worst_idx],))
+    #         worst_match = cursor.fetchone()
 
-            conn.close()
-            return {"status_code": ResponseCode.SUCCESS.value, "data": [worst_match, worst_similarity]}
-        except sqlite3.Error as e:
-            logging.error(f"Database error: {e}")
-            return {"status_code": ResponseCode.DATABASE_ERROR.value}
+    #         conn.close()
+    #         return {"status_code": ResponseCode.SUCCESS.value, "data": [worst_match, worst_similarity]}
+    #     except sqlite3.Error as e:
+    #         logging.error(f"Database error: {e}")
+    #         return {"status_code": ResponseCode.DATABASE_ERROR.value}
 
-    def get_all_embeddings(self):
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username, bio_embedding FROM accounts WHERE bio_embedding IS NOT NULL")
-        users = cursor.fetchall()
+    # def get_all_embeddings(self):
+    #     conn = self.get_connection()
+    #     cursor = conn.cursor()
+    #     cursor.execute("SELECT id, username, bio_embedding FROM accounts WHERE bio_embedding IS NOT NULL")
+    #     users = cursor.fetchall()
         
-        user_ids, usernames, bio_vectors = [], [], []
+    #     user_ids, usernames, bio_vectors = [], [], []
         
-        for user_id, username, blob in users:
-            bio_vector = np.frombuffer(blob, dtype=np.float32)  # Convert BLOB back to NumPy array
-            user_ids.append(user_id)
-            usernames.append(username)
-            bio_vectors.append(bio_vector)
+    #     for user_id, username, blob in users:
+    #         bio_vector = np.frombuffer(blob, dtype=np.float32)  # Convert BLOB back to NumPy array
+    #         user_ids.append(user_id)
+    #         usernames.append(username)
+    #         bio_vectors.append(bio_vector)
         
-        conn.close()
-        return user_ids, usernames, np.array(bio_vectors)
+    #     conn.close()
+    #     return user_ids, usernames, np.array(bio_vectors)
 
     def count_messages(self, username, delivered: bool) -> int:
         """ Given a username and delivered status, return the count of delivered or undelivered messages """
