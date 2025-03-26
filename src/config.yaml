@@ -28,3 +28,4 @@ servers: [
   {id: 4, host: "127.0.0.1", port: 65428, log_path: "../logs/s4.log", db_path: "../data/s4.db"},
 ]
 heartbeat_len: 1
+n_servers: 5
