@@ -59,19 +59,6 @@ class GRPCClient:
         self.stop_event = threading.Event()
         self.receiver_thread = None
 
-    def _poll_leader(self):
-        """Background thread that checks that the client is still connected to an active leader"""
-        while not self.stop_event.is_set():
-            try:
-                response = self.stub.Status(handler_pb2.Empty())
-                if self.leader_id != response.current_leader_id: 
-                    print(f"Current server is not leader!")
-                    self.failover_to_leader(self.live_servers[response.current_leader_id])
-            except RpcError as e:
-                print(f"Lost connection to leader: {e}")
-                self.find_new_leader()
-            time.sleep(POLL_INTERVAL)
-
     def _failover_to_leader(self, new_leader_addr):
         """Connect to the new leader given that we are connected to the wrong server"""
 
@@ -83,8 +70,8 @@ class GRPCClient:
     def _find_new_leader(self):
         """Continues to ping the servers until the new leader's address provided"""
 
-        response = self.stub.NewLeader(handler_pb2.NewLeaderRequest(leader_id=self.leader_id))
-        return response.new_leader_id
+        response = self.stub.NewLeader(handler_pb2.NewLeaderResponse(new_leader_id=self.leader_id))
+        return response.new_leader_id - 1
 
     def _start_stream(self):
         if self.receiver_thread is not None:
@@ -104,6 +91,20 @@ class GRPCClient:
                     self.incoming_queue.put(msg)
         except grpc.RpcError as e:
             return
+        
+    def poll_leader(self):
+        """Background thread that checks that the client is still connected to an active leader"""
+        while not self.stop_event.is_set():
+            try:
+                response = self.stub.Status(handler_pb2.Empty())
+                if self.leader_id != response.current_leader_id: 
+                    print(f"Current server is not leader!")
+                    self.failover_to_leader(self.live_servers[response.current_leader_id])
+            except RpcError as e:
+                print(f"Lost connection to leader: {e}")
+                self._find_new_leader()
+            time.sleep(POLL_INTERVAL)
+
         
     def send_message(self, receiver, content):
         """Send a message (unary call)."""
@@ -638,6 +639,8 @@ def main(args):
     # Set up client GUI
     root = tk.Tk()
     app = ChatGUI(root, grpc_client)
+
+    grpc_client.poll_leader()
 
     # Define close loop
     def on_close():

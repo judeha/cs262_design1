@@ -4,7 +4,7 @@ syntax = "proto3";
 service Handler {
     rpc Status(Empty) returns (currentLeaderResponse);
     rpc Ending(EndingRequest) returns (EndingResponse);
-    rpc NewLeader(NewLeaderRequest) returns (NewLeaderResponse);
+    rpc NewLeader(Empty) returns (NewLeaderResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
     rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
     rpc LoginAccount(LoginAccountRequest) returns (LoginAccountResponse);
@@ -18,19 +18,15 @@ service Handler {
     rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse);
 }
 
-message NewLeaderRequest{
-    int32 leader_id = 0;
+message Empty{
 }
 
 message NewLeaderResponse{
-    int32 new_leader_id = 0;
-    string role = 0;
-    int32 status_code = 1;
+    int32 new_leader_id = 1;
 }
 
 message currentLeaderResponse{
-    int32 current_leader_id = 0;
-    int32 role = 1;
+    int32 current_leader_id = 1;
 }
 
 // Message for Ending
