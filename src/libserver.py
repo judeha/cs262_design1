@@ -315,3 +315,4 @@ class Message:
         
         # Set selector to listen for write events, we're done reading.
         self._set_selector_events_mask("w")
+
