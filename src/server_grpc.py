@@ -12,6 +12,7 @@ import handler_pb2_grpc
 from concurrent import futures
 import grpc
 import random
+import sys
 
 # Load configuration from YAML file
 yaml_path = "config.yaml"
@@ -21,12 +22,12 @@ with open(yaml_path, "r") as y:
 # Get values from config
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
-idx = 0
+idx = int(sys.argv[1])
 server_config = config.get("servers")[idx]
-DEFAULT_HOST = server_config.get("host", "localhost")
-DEFAULT_PORT = server_config.get("port", 65432)
-DB_PATH = server_config.get("db_path", "data/s0.db")
-LOG_PATH = server_config.get("log_path", "logs/s0.log")
+host = server_config.get("host", "localhost")
+port = server_config.get("port", 65432)
+DB_PATH = server_config.get("db_path", f"data/s{idx}.db")
+LOG_PATH = server_config.get("log_path", f"logs/s{idx}.log")
 
 # Global variables
 active_clients = {} # Active clients mapping (username -> socket)
@@ -39,8 +40,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logging.info("Server started")
-logging.info(f"Host: {DEFAULT_HOST}")
-logging.info(f"Port: {DEFAULT_PORT}")
+logging.info(f"Host: {host}")
+logging.info(f"Port: {port}")
 
 
 # Initialize the database
@@ -54,7 +55,7 @@ class Role:
 role = Role.FOLLOWER
 leader_addr = None
 n_servers = len(config.get("servers"))
-all_servers = [f"{config.get("servers")[i].get("host")}:{config.get("servers")[i].get("port")}" for i in range(n_servers)]
+all_servers = [f"{config.get('servers')[i]['host']}:{config.get('servers')[i]['port']}" for i in range(n_servers)]
 logs = []
 term = 0
 timer = random.randint(0,3)
@@ -69,7 +70,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     def __init__(self):
         # self.db = DatabaseHandler(DB_PATH)
         # Active clients mapping (username -> Message object)
-        global active_clients
+        global active_clients, logs
         self.db_path = DB_PATH
 
         # logging.info(f"New connection established: {addr}")
@@ -83,6 +84,9 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def CheckAccountExists(self, request, context):
+        # Add a new log entry
+        logs.append(handler_pb2.Entry(acc_exists=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.AccountExistsResponse()
@@ -96,6 +100,9 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
 
     def CreateAccount(self, request, context):
+        # Add a new log entry
+        logs.append(handler_pb2.Entry(create_acc=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.CreateAccountResponse()
@@ -105,6 +112,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def LoginAccount(self, request, context):
+        logs.append(handler_pb2.Entry(login_acc=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.LoginAccountResponse()
@@ -124,6 +133,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
         
     def ListAccount(self, request, context):
+        logs.append(handler_pb2.Entry(list_acc=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.ListAccountResponse()
         result = db.list_accounts(request.pattern)
@@ -139,6 +150,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
     
     def DeleteAccount(self, request, context):
+        logs.append(handler_pb2.Entry(create_acc=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.DeleteAccountResponse()
         result = db.delete_account(request.username, request.password)
@@ -148,6 +161,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
 
     def FetchHomepage(self, request, context):
+        logs.append(handler_pb2.Entry(fetch_homepage=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Create fresh DB instance
         response = handler_pb2.FetchHomepageResponse()
@@ -163,6 +178,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
 
     def FetchMessageRead(self, request, context):
+        logs.append(handler_pb2.Entry(fetch_read=request))
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesReadResponse()
         result = db.fetch_messages_delivered(request.username, request.num)
@@ -177,6 +193,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response 
 
     def FetchMessageUnread(self, request, context):
+        logs.append(handler_pb2.Entry(fetch_read=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.FetchMessagesUnreadResponse()
         result = db.fetch_messages_undelivered(request.username, request.num)
@@ -193,6 +211,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
 
     def DeleteMessage(self, request, context):
+        logs.append(handler_pb2.Entry(delete_msg=request))
+
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         # Process the request
         response = handler_pb2.DeleteMessageResponse()
@@ -208,46 +228,95 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
     
         return response
     
-    def SendMessage(self, request, context):
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-        # Process the request
+    # def SendMessage(self, request, context):
+    #     db = DatabaseHandler(self.db_path)  # Create fresh DB instance
+    #     # Process the request
+    #     response = handler_pb2.SendMessageResponse()
+    #     sender = request.sender
+    #     receiver = request.receiver
+    #     msg_content = request.content
+    #     timestamp = round(time.time())
+        
+    #     request.timestamp = timestamp
+    #     logs.append(handler_pb2.Entry(send_msg=request))
+
+    #     with lock:
+    #         delivered = receiver in active_clients
+
+    #     # Insert the message into the database
+    #     result = db.insert_message(sender, receiver, msg_content, timestamp, delivered)
+
+    #     # Create SendMessageResponse for the sender
+    #     response.status_code = result["status_code"]
+
+    #     # If receiver online: try sending immediately
+    #     if response.status_code == ResponseCode.SUCCESS.value and delivered:
+    #         try:
+    #             # Create a ReceiveMessageResponse for the receiver
+    #             msg = handler_pb2.Message(
+    #                 id=result["data"][0],
+    #                 sender=sender,
+    #                 receiver=receiver,
+    #                 content=msg_content,
+    #                 timestamp=timestamp,
+    #                 delivered=delivered
+    #             )
+    #             # Send the message to the receiver
+    #             with lock:
+    #                 active_clients[receiver].put(msg)
+
+    #         except Exception as e:
+    #             print("Error sending message:", e)
+
+    #     return response
+    
+    def SendMessage(self, request_iterator, context):
+        db = DatabaseHandler(self.db_path)
+        delivered_count = 0
+        total_count = 0
+
+        for req in request_iterator:
+            sender = req.sender
+            receiver = req.receiver
+            content = req.content
+            timestamp = round(time.time())
+
+            req.timestamp = timestamp
+            logs.append(handler_pb2.Entry(send_msg=req))
+
+            # Check if receiver is online
+            with lock:
+                is_online = receiver in active_clients
+
+            # Insert message (delivered=1 if online, else 0)
+            result = db.insert_message(sender, receiver, content, timestamp, is_online)
+            total_count += 1
+            if result["status_code"] == ResponseCode.SUCCESS.value:
+                # If receiver is online, push to their queue
+                if is_online:
+                    with lock:
+                        msg = handler_pb2.Message(
+                            id=result["data"][0],  # e.g. DB returns newly inserted ID
+                            sender=sender,
+                            receiver=receiver,
+                            content=content,
+                            timestamp=timestamp
+                        )
+                        active_clients[receiver].put(msg)
+                    delivered_count += 1
+
+        # Build a final, single response
         response = handler_pb2.SendMessageResponse()
-        sender = request.sender
-        receiver = request.receiver
-        msg_content = request.content
-        timestamp = round(time.time())
-        with lock:
-            delivered = receiver in active_clients
-
-        # Insert the message into the database
-        result = db.insert_message(sender, receiver, msg_content, timestamp, delivered)
-
-        # Create SendMessageResponse for the sender
-        response.status_code = result["status_code"]
-
-        # If receiver online: try sending immediately
-        if response.status_code == ResponseCode.SUCCESS.value and delivered:
-            try:
-                # Create a ReceiveMessageResponse for the receiver
-                msg = handler_pb2.Message(
-                    id=result["data"][0],
-                    sender=sender,
-                    receiver=receiver,
-                    content=msg_content,
-                    timestamp=timestamp,
-                    delivered=delivered
-                )
-                # Send the message to the receiver
-                with lock:
-                    active_clients[receiver].put(msg)
-
-            except Exception as e:
-                print("Error sending message:", e)
-
+        response.status_code = ResponseCode.SUCCESS.value
+        # response.delivered_count = delivered_count
+        # response.total_count = total_count
         return response
     
     def ReceiveMessage(self, request, context):
         """Continuously stream new messages to the client."""
+
+        logs.append(handler_pb2.Entry(receive_msg=request))
+
         username = request.username
         with lock:
             if username not in active_clients:
@@ -258,7 +327,8 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         while True:
             try:
                 # block for up to 30s waiting for a new message
-                msg = user_queue.get(timeout=5)
+                # msg = user_queue.get(timeout=5)
+                msg = user_queue.get(block=True)
                 response = handler_pb2.ReceiveMessageResponse()
                 response.msg_lst.append(msg)
                 yield response
@@ -269,6 +339,7 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
 
     def Ending(self, request, context):
         """Removes a client from active_clients."""
+        logs.append(handler_pb2.Entry(ending=request))
         username = request.username
         with lock:
             if username in active_clients:
@@ -279,15 +350,17 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             
 class RaftService(handler_pb2_grpc.RaftServicer):
     def Vote(self, request, context):
-        global term, voted_for
+        global term, voted_for, leader_addr
         # TODO: local logging
         # If candidate is ahead of me, vote for them + update my term
         if request.cand_term > term:
             term = request.cand_term
             voted_for = None
-            return handler_pb2.VoteResponse(term=term, vote_granted=True)
+            response = handler_pb2.VoteResponse(term=term, success=True)
         else:
-            return handler_pb2.VoteResponse(term=term, vote_granted=False)
+            leader_addr = None
+            response = handler_pb2.VoteResponse(term=term, success=False)
+        return response
     def AppendEntries(self, request, context):
         """Followers respond to leader's heartbeat"""
         global leader_addr, logs, DB_PATH, timer
@@ -311,9 +384,9 @@ class RaftService(handler_pb2_grpc.RaftServicer):
         global leader_addr
         return handler_pb2.GetLeaderResponse(leader_addr=leader_addr)
 
-def serve(host, port):
+def serve():
     """Main loop"""
-    global all_servers, votes_recv, idx, term, role, timer, logs, commit_idx, voted_for, DEFAULT_HOST, DEFAULT_PORT, n_servers, leader_addr
+    global all_servers, votes_recv, idx, term, role, timer, logs, commit_idx, voted_for, n_servers, leader_addr, host, port
 
     # Setup
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -328,16 +401,18 @@ def serve(host, port):
             channel = grpc.insecure_channel(s)
             stub = handler_pb2_grpc.RaftStub(channel)
             response = stub.Vote(handler_pb2.VoteRequest(
-                term=-1,
-                candidate_id=0, # auto select first server as leader to begin with
+                cand_term=0,
+                cand_id=0, # auto select first server as leader to begin with
                 prev_log_idx=0,
                 prev_log_term=0
                 )
             )
             # TODO: local logging
             channel.close()
+            print("connecting...")
             break
         except Exception as e:
+            print(e)
             # TODO: local logging
             time.sleep(1)
 
@@ -427,11 +502,13 @@ def serve(host, port):
 
 if __name__ == "__main__":
     # Parse optional command-line arguments
+    # TODO how to test multiple servers?
     import argparse
 
-    parser = argparse.ArgumentParser(description="Start the chat server.")
-    parser.add_argument("--host", type=str, default=DEFAULT_HOST, help="Server host (default from config)")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Server port (default from config)")
+    # parser = argparse.ArgumentParser(description="Start the chat server.")
+    # parser.add_argument("--host", type=str, default=DEFAULT_HOST, help="Server host (default from config)")
+    # parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Server port (default from config)")
 
-    args = parser.parse_args()
-    serve(host=args.host, port=args.port)
+    # args = parser.parse_args()
+    # serve(host=args.host, port=args.port)
+    serve()

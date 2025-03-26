@@ -21,9 +21,9 @@ emojis: ["🌺","🌸","👩🏼‍❤️‍💋‍👩🏽","👩🏼","💋","
 
 # Replication
 servers: [
-  {id: 0, host: "127.0.0.1", port: 65432, log_path: "logs/s0.txt", db_path: "data/s0.db"},
-  {id: 1, host: "127.0.0.1", port: 65431, log_path: "logs/s1.txt", db_path: "data/s1.db"},
-  {id: 2, host: "127.0.0.1", port: 65439, log_path: "logs/s2.txt", db_path: "data/s2.db"},
-  {id: 3, host: "127.0.0.1", port: 65429, log_path: "logs/s3.txt", db_path: "data/s3.db"},
-  {id: 4, host: "127.0.0.1", port: 65428, log_path: "logs/s4.txt", db_path: "data/s4.db"},
+  {id: 0, host: "127.0.0.1", port: 65432, log_path: "../logs/s0.txt", db_path: "../data/s0.db"},
+  {id: 1, host: "127.0.0.1", port: 65431, log_path: "../logs/s1.txt", db_path: "../data/s1.db"},
+  {id: 2, host: "127.0.0.1", port: 65439, log_path: "../logs/s2.txt", db_path: "../data/s2.db"},
+  {id: 3, host: "127.0.0.1", port: 65429, log_path: "../logs/s3.txt", db_path: "../data/s3.db"},
+  {id: 4, host: "127.0.0.1", port: 65428, log_path: "../logs/s4.txt", db_path: "../data/s4.db"},
 ]

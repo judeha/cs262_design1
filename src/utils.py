@@ -3,6 +3,7 @@ from enum import Enum
 import struct
 import handler_pb2
 import handler_pb2_grpc
+import time
 
 class ResponseCode(Enum):
     """Enumeration of server response codes."""
@@ -49,22 +50,23 @@ def apply_action(request, db_path):
     # Import inside to avoid circular import error
     from database import DatabaseHandler
     db = DatabaseHandler(db_path)
-    if request.action == OpCode.CREATE_ACCOUNT:
-        db.create_account(request.username, request.password, request.bio)
-    elif request.action == OpCode.DELETE_ACCOUNT:
-        db.delete_account(request.username)
-    elif request.action == OpCode.DELETE_MSG:
-        db.delete_messages(request.username, request.message_id_lst)
-    elif request.action == OpCode.READ_MSG_UNDELIVERED:
-        db.fetch_messages_undelivered(request.username, request.num)
-    elif request.action == OpCode.SEND_MSG:
+    if request.HasField("create_acc"):
+        db.create_account(request.create_acc.username, request.create_acc.password, request.create_acc.bio)
+    elif request.HasField("delete_acc"):
+        db.delete_account(request.delete_acc.username)
+    elif request.HasField("delete_msg"):
+        db.delete_messages(request.delete_msg.username, request.delete_msg.message_id_lst)
+    elif request.HasField("fetch_unread"):
+        db.fetch_messages_unread(request.fetch_unread.username, request.fetch_unread.num)
+    elif request.HasField("send_msg"):
+        delivered = 1
+        db.insert_message(request.send_msg.sender, request.send_msg.receiver, request.send_msg.content, request.timestamp, delivered)
+    elif request.HasField("receive_msg"):
         pass
-    elif request.action == OpCode.RECEIVE_MSG:
-        pass
-    elif request.action == OpCode.CONNECT:
+    elif request.HasField("connect"):
         pass
     else:
-        raise ValueError(f"Unknown action code: {request.action}")
+        raise ValueError(f"Unknown action code: {request}")
 
     pass
 

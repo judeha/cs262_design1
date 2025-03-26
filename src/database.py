@@ -15,8 +15,8 @@ with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 
 # Defaults
-VERSION = config["version"]
-DB_PATH = config["db_path"]
+# VERSION = config["version"]
+# DB_PATH = config["db_path"]
 MIN_USERNAME_LEN = config["min_username_len"]
 MIN_PASSWORD_LEN = config["min_password_len"]
 MAX_USERNAME_LEN = config["max_username_len"]

@@ -141,6 +141,7 @@ message SendMessageRequest {
     string sender = 1;
     string receiver = 2;
     string content = 3;
+    int32 timestamp = 4;
 }
 
 message SendMessageResponse {
@@ -182,19 +183,20 @@ message Account {
 // ----------------------------------------------------------------------------------------------
 
 message Entry {
-  oneof test_oneof {
-    EndingRequest endingrequest = 1;
-    AccountExistsRequest accountexistsrequest = 2;
-    CreateAccountRequest createaccountrequest = 3;
-    LoginAccountRequest loginaccountrequest = 4;
-    DeleteAccountRequest deleteaccountrequest = 5;
-    FetchHomepageRequest fetchhomepagerequest = 6;
-    FetchMessagesUnreadRequest fetchmessagesunreadrequest = 7;
-    FetchMessagesReadRequest fetchmessagesreadrequest = 8;
-    DeleteMessageRequest deletemessagerequest = 9;
-    SendMessageRequest sendmessagerequest = 10;
-    ReceiveMessageRequest receivmessagerequest = 11;
-  }
+    oneof request {
+        EndingRequest ending = 1;
+        AccountExistsRequest acc_exists = 2;
+        CreateAccountRequest create_acc = 3;
+        LoginAccountRequest login_acc = 4;
+        DeleteAccountRequest delete_acc = 5;
+        FetchHomepageRequest fetch_homepage = 6;
+        FetchMessagesUnreadRequest fetch_unread = 7;
+        FetchMessagesReadRequest fetch_read = 8;
+        DeleteMessageRequest delete_msg = 9;
+        SendMessageRequest send_msg = 10;
+        ReceiveMessageRequest receive_mesg = 11;
+        string connect = 12;
+    }
 }
 
 message VoteRequest {
