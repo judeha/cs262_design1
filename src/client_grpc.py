@@ -95,7 +95,6 @@ class GRPCClient:
                 if self.leader_addr != response.leader_addr:
                     # print(f"Found leader: {response.leader_id}")
                     self.leader_addr = response.leader_addr
-
                     break  # Exit loop once the leader is found
                 
                 print(f"Not the leader, retrying to find the leader...")
@@ -120,7 +119,6 @@ class GRPCClient:
                     self.leader_addr = response.leader_addr
                     #Assumes that the servers will find the next leader 
                     self._failover_to_leader(self.leader_addr)
-
                 else:
                     pass
                     # print(f"Connected to leader: {response.current_leader_id}")
