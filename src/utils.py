@@ -41,6 +41,7 @@ class OpCode(Enum):
     SEND_MSG = 10
     RECEIVE_MSG = 11
     MATCH = 12
+    CONNECT = 13
 
 def apply_action(request, db_path):
     """Apply a write action to local database upon request from leader"""

@@ -215,3 +215,73 @@ class Account(_message.Message):
     username: str
     bio: str
     def __init__(self, id: _Optional[int] = ..., username: _Optional[str] = ..., bio: _Optional[str] = ...) -> None: ...
+
+class Entry(_message.Message):
+    __slots__ = ("endingrequest", "accountexistsrequest", "createaccountrequest", "loginaccountrequest", "deleteaccountrequest", "fetchhomepagerequest", "fetchmessagesunreadrequest", "fetchmessagesreadrequest", "deletemessagerequest", "sendmessagerequest", "receivmessagerequest")
+    ENDINGREQUEST_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNTEXISTSREQUEST_FIELD_NUMBER: _ClassVar[int]
+    CREATEACCOUNTREQUEST_FIELD_NUMBER: _ClassVar[int]
+    LOGINACCOUNTREQUEST_FIELD_NUMBER: _ClassVar[int]
+    DELETEACCOUNTREQUEST_FIELD_NUMBER: _ClassVar[int]
+    FETCHHOMEPAGEREQUEST_FIELD_NUMBER: _ClassVar[int]
+    FETCHMESSAGESUNREADREQUEST_FIELD_NUMBER: _ClassVar[int]
+    FETCHMESSAGESREADREQUEST_FIELD_NUMBER: _ClassVar[int]
+    DELETEMESSAGEREQUEST_FIELD_NUMBER: _ClassVar[int]
+    SENDMESSAGEREQUEST_FIELD_NUMBER: _ClassVar[int]
+    RECEIVMESSAGEREQUEST_FIELD_NUMBER: _ClassVar[int]
+    endingrequest: EndingRequest
+    accountexistsrequest: AccountExistsRequest
+    createaccountrequest: CreateAccountRequest
+    loginaccountrequest: LoginAccountRequest
+    deleteaccountrequest: DeleteAccountRequest
+    fetchhomepagerequest: FetchHomepageRequest
+    fetchmessagesunreadrequest: FetchMessagesUnreadRequest
+    fetchmessagesreadrequest: FetchMessagesReadRequest
+    deletemessagerequest: DeleteMessageRequest
+    sendmessagerequest: SendMessageRequest
+    receivmessagerequest: ReceiveMessageRequest
+    def __init__(self, endingrequest: _Optional[_Union[EndingRequest, _Mapping]] = ..., accountexistsrequest: _Optional[_Union[AccountExistsRequest, _Mapping]] = ..., createaccountrequest: _Optional[_Union[CreateAccountRequest, _Mapping]] = ..., loginaccountrequest: _Optional[_Union[LoginAccountRequest, _Mapping]] = ..., deleteaccountrequest: _Optional[_Union[DeleteAccountRequest, _Mapping]] = ..., fetchhomepagerequest: _Optional[_Union[FetchHomepageRequest, _Mapping]] = ..., fetchmessagesunreadrequest: _Optional[_Union[FetchMessagesUnreadRequest, _Mapping]] = ..., fetchmessagesreadrequest: _Optional[_Union[FetchMessagesReadRequest, _Mapping]] = ..., deletemessagerequest: _Optional[_Union[DeleteMessageRequest, _Mapping]] = ..., sendmessagerequest: _Optional[_Union[SendMessageRequest, _Mapping]] = ..., receivmessagerequest: _Optional[_Union[ReceiveMessageRequest, _Mapping]] = ...) -> None: ...
+
+class VoteRequest(_message.Message):
+    __slots__ = ("cand_term",)
+    CAND_TERM_FIELD_NUMBER: _ClassVar[int]
+    cand_term: int
+    def __init__(self, cand_term: _Optional[int] = ...) -> None: ...
+
+class VoteResponse(_message.Message):
+    __slots__ = ("term", "success")
+    TERM_FIELD_NUMBER: _ClassVar[int]
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    term: int
+    success: bool
+    def __init__(self, term: _Optional[int] = ..., success: bool = ...) -> None: ...
+
+class AppendEntriesRequest(_message.Message):
+    __slots__ = ("leader_addr", "term", "prev_log_term", "prev_log_idx", "entries", "commit")
+    LEADER_ADDR_FIELD_NUMBER: _ClassVar[int]
+    TERM_FIELD_NUMBER: _ClassVar[int]
+    PREV_LOG_TERM_FIELD_NUMBER: _ClassVar[int]
+    PREV_LOG_IDX_FIELD_NUMBER: _ClassVar[int]
+    ENTRIES_FIELD_NUMBER: _ClassVar[int]
+    COMMIT_FIELD_NUMBER: _ClassVar[int]
+    leader_addr: str
+    term: int
+    prev_log_term: int
+    prev_log_idx: int
+    entries: _containers.RepeatedCompositeFieldContainer[Entry]
+    commit: int
+    def __init__(self, leader_addr: _Optional[str] = ..., term: _Optional[int] = ..., prev_log_term: _Optional[int] = ..., prev_log_idx: _Optional[int] = ..., entries: _Optional[_Iterable[_Union[Entry, _Mapping]]] = ..., commit: _Optional[int] = ...) -> None: ...
+
+class AppendEntriesResponse(_message.Message):
+    __slots__ = ("term", "success")
+    TERM_FIELD_NUMBER: _ClassVar[int]
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    term: int
+    success: bool
+    def __init__(self, term: _Optional[int] = ..., success: bool = ...) -> None: ...
+
+class GetLeaderResponse(_message.Message):
+    __slots__ = ("leader_addr",)
+    LEADER_ADDR_FIELD_NUMBER: _ClassVar[int]
+    leader_addr: str
+    def __init__(self, leader_addr: _Optional[str] = ...) -> None: ...

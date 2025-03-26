@@ -3,7 +3,8 @@
 import grpc
 import warnings
 
-import handler_pb2 as handler__pb2
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
+from src import handler_pb2 as src_dot_handler__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +19,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in handler_pb2_grpc.py depends on'
+        + f' but the generated code in src/handler_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -26,7 +27,7 @@ if _version_not_supported:
 
 
 class HandlerStub(object):
-    """gRPC service definition
+    """gRPC service definition for client-server
     """
 
     def __init__(self, channel):
@@ -37,68 +38,68 @@ class HandlerStub(object):
         """
         self.Ending = channel.unary_unary(
                 '/Handler/Ending',
-                request_serializer=handler__pb2.EndingRequest.SerializeToString,
-                response_deserializer=handler__pb2.EndingResponse.FromString,
+                request_serializer=src_dot_handler__pb2.EndingRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.EndingResponse.FromString,
                 _registered_method=True)
         self.CheckAccountExists = channel.unary_unary(
                 '/Handler/CheckAccountExists',
-                request_serializer=handler__pb2.AccountExistsRequest.SerializeToString,
-                response_deserializer=handler__pb2.AccountExistsResponse.FromString,
+                request_serializer=src_dot_handler__pb2.AccountExistsRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.AccountExistsResponse.FromString,
                 _registered_method=True)
         self.CreateAccount = channel.unary_unary(
                 '/Handler/CreateAccount',
-                request_serializer=handler__pb2.CreateAccountRequest.SerializeToString,
-                response_deserializer=handler__pb2.CreateAccountResponse.FromString,
+                request_serializer=src_dot_handler__pb2.CreateAccountRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.CreateAccountResponse.FromString,
                 _registered_method=True)
         self.LoginAccount = channel.unary_unary(
                 '/Handler/LoginAccount',
-                request_serializer=handler__pb2.LoginAccountRequest.SerializeToString,
-                response_deserializer=handler__pb2.LoginAccountResponse.FromString,
+                request_serializer=src_dot_handler__pb2.LoginAccountRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.LoginAccountResponse.FromString,
                 _registered_method=True)
         self.ListAccount = channel.unary_unary(
                 '/Handler/ListAccount',
-                request_serializer=handler__pb2.ListAccountRequest.SerializeToString,
-                response_deserializer=handler__pb2.ListAccountResponse.FromString,
+                request_serializer=src_dot_handler__pb2.ListAccountRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.ListAccountResponse.FromString,
                 _registered_method=True)
         self.DeleteAccount = channel.unary_unary(
                 '/Handler/DeleteAccount',
-                request_serializer=handler__pb2.DeleteAccountRequest.SerializeToString,
-                response_deserializer=handler__pb2.DeleteAccountResponse.FromString,
+                request_serializer=src_dot_handler__pb2.DeleteAccountRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.DeleteAccountResponse.FromString,
                 _registered_method=True)
         self.FetchHomepage = channel.unary_unary(
                 '/Handler/FetchHomepage',
-                request_serializer=handler__pb2.FetchHomepageRequest.SerializeToString,
-                response_deserializer=handler__pb2.FetchHomepageResponse.FromString,
+                request_serializer=src_dot_handler__pb2.FetchHomepageRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.FetchHomepageResponse.FromString,
                 _registered_method=True)
         self.FetchMessageUnread = channel.unary_unary(
                 '/Handler/FetchMessageUnread',
-                request_serializer=handler__pb2.FetchMessagesUnreadRequest.SerializeToString,
-                response_deserializer=handler__pb2.FetchMessagesUnreadResponse.FromString,
+                request_serializer=src_dot_handler__pb2.FetchMessagesUnreadRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.FetchMessagesUnreadResponse.FromString,
                 _registered_method=True)
         self.FetchMessageRead = channel.unary_unary(
                 '/Handler/FetchMessageRead',
-                request_serializer=handler__pb2.FetchMessagesReadRequest.SerializeToString,
-                response_deserializer=handler__pb2.FetchMessagesReadResponse.FromString,
+                request_serializer=src_dot_handler__pb2.FetchMessagesReadRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.FetchMessagesReadResponse.FromString,
                 _registered_method=True)
         self.DeleteMessage = channel.unary_unary(
                 '/Handler/DeleteMessage',
-                request_serializer=handler__pb2.DeleteMessageRequest.SerializeToString,
-                response_deserializer=handler__pb2.DeleteMessageResponse.FromString,
+                request_serializer=src_dot_handler__pb2.DeleteMessageRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.DeleteMessageResponse.FromString,
                 _registered_method=True)
         self.SendMessage = channel.unary_unary(
                 '/Handler/SendMessage',
-                request_serializer=handler__pb2.SendMessageRequest.SerializeToString,
-                response_deserializer=handler__pb2.SendMessageResponse.FromString,
+                request_serializer=src_dot_handler__pb2.SendMessageRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.SendMessageResponse.FromString,
                 _registered_method=True)
         self.ReceiveMessage = channel.unary_stream(
                 '/Handler/ReceiveMessage',
-                request_serializer=handler__pb2.ReceiveMessageRequest.SerializeToString,
-                response_deserializer=handler__pb2.ReceiveMessageResponse.FromString,
+                request_serializer=src_dot_handler__pb2.ReceiveMessageRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.ReceiveMessageResponse.FromString,
                 _registered_method=True)
 
 
 class HandlerServicer(object):
-    """gRPC service definition
+    """gRPC service definition for client-server
     """
 
     def Ending(self, request, context):
@@ -178,63 +179,63 @@ def add_HandlerServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'Ending': grpc.unary_unary_rpc_method_handler(
                     servicer.Ending,
-                    request_deserializer=handler__pb2.EndingRequest.FromString,
-                    response_serializer=handler__pb2.EndingResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.EndingRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.EndingResponse.SerializeToString,
             ),
             'CheckAccountExists': grpc.unary_unary_rpc_method_handler(
                     servicer.CheckAccountExists,
-                    request_deserializer=handler__pb2.AccountExistsRequest.FromString,
-                    response_serializer=handler__pb2.AccountExistsResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.AccountExistsRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.AccountExistsResponse.SerializeToString,
             ),
             'CreateAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateAccount,
-                    request_deserializer=handler__pb2.CreateAccountRequest.FromString,
-                    response_serializer=handler__pb2.CreateAccountResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.CreateAccountRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.CreateAccountResponse.SerializeToString,
             ),
             'LoginAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.LoginAccount,
-                    request_deserializer=handler__pb2.LoginAccountRequest.FromString,
-                    response_serializer=handler__pb2.LoginAccountResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.LoginAccountRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.LoginAccountResponse.SerializeToString,
             ),
             'ListAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.ListAccount,
-                    request_deserializer=handler__pb2.ListAccountRequest.FromString,
-                    response_serializer=handler__pb2.ListAccountResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.ListAccountRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.ListAccountResponse.SerializeToString,
             ),
             'DeleteAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteAccount,
-                    request_deserializer=handler__pb2.DeleteAccountRequest.FromString,
-                    response_serializer=handler__pb2.DeleteAccountResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.DeleteAccountRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.DeleteAccountResponse.SerializeToString,
             ),
             'FetchHomepage': grpc.unary_unary_rpc_method_handler(
                     servicer.FetchHomepage,
-                    request_deserializer=handler__pb2.FetchHomepageRequest.FromString,
-                    response_serializer=handler__pb2.FetchHomepageResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.FetchHomepageRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.FetchHomepageResponse.SerializeToString,
             ),
             'FetchMessageUnread': grpc.unary_unary_rpc_method_handler(
                     servicer.FetchMessageUnread,
-                    request_deserializer=handler__pb2.FetchMessagesUnreadRequest.FromString,
-                    response_serializer=handler__pb2.FetchMessagesUnreadResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.FetchMessagesUnreadRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.FetchMessagesUnreadResponse.SerializeToString,
             ),
             'FetchMessageRead': grpc.unary_unary_rpc_method_handler(
                     servicer.FetchMessageRead,
-                    request_deserializer=handler__pb2.FetchMessagesReadRequest.FromString,
-                    response_serializer=handler__pb2.FetchMessagesReadResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.FetchMessagesReadRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.FetchMessagesReadResponse.SerializeToString,
             ),
             'DeleteMessage': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteMessage,
-                    request_deserializer=handler__pb2.DeleteMessageRequest.FromString,
-                    response_serializer=handler__pb2.DeleteMessageResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.DeleteMessageRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.DeleteMessageResponse.SerializeToString,
             ),
             'SendMessage': grpc.unary_unary_rpc_method_handler(
                     servicer.SendMessage,
-                    request_deserializer=handler__pb2.SendMessageRequest.FromString,
-                    response_serializer=handler__pb2.SendMessageResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.SendMessageRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.SendMessageResponse.SerializeToString,
             ),
             'ReceiveMessage': grpc.unary_stream_rpc_method_handler(
                     servicer.ReceiveMessage,
-                    request_deserializer=handler__pb2.ReceiveMessageRequest.FromString,
-                    response_serializer=handler__pb2.ReceiveMessageResponse.SerializeToString,
+                    request_deserializer=src_dot_handler__pb2.ReceiveMessageRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.ReceiveMessageResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -245,7 +246,7 @@ def add_HandlerServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class Handler(object):
-    """gRPC service definition
+    """gRPC service definition for client-server
     """
 
     @staticmethod
@@ -263,8 +264,8 @@ class Handler(object):
             request,
             target,
             '/Handler/Ending',
-            handler__pb2.EndingRequest.SerializeToString,
-            handler__pb2.EndingResponse.FromString,
+            src_dot_handler__pb2.EndingRequest.SerializeToString,
+            src_dot_handler__pb2.EndingResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -290,8 +291,8 @@ class Handler(object):
             request,
             target,
             '/Handler/CheckAccountExists',
-            handler__pb2.AccountExistsRequest.SerializeToString,
-            handler__pb2.AccountExistsResponse.FromString,
+            src_dot_handler__pb2.AccountExistsRequest.SerializeToString,
+            src_dot_handler__pb2.AccountExistsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -317,8 +318,8 @@ class Handler(object):
             request,
             target,
             '/Handler/CreateAccount',
-            handler__pb2.CreateAccountRequest.SerializeToString,
-            handler__pb2.CreateAccountResponse.FromString,
+            src_dot_handler__pb2.CreateAccountRequest.SerializeToString,
+            src_dot_handler__pb2.CreateAccountResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -344,8 +345,8 @@ class Handler(object):
             request,
             target,
             '/Handler/LoginAccount',
-            handler__pb2.LoginAccountRequest.SerializeToString,
-            handler__pb2.LoginAccountResponse.FromString,
+            src_dot_handler__pb2.LoginAccountRequest.SerializeToString,
+            src_dot_handler__pb2.LoginAccountResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -371,8 +372,8 @@ class Handler(object):
             request,
             target,
             '/Handler/ListAccount',
-            handler__pb2.ListAccountRequest.SerializeToString,
-            handler__pb2.ListAccountResponse.FromString,
+            src_dot_handler__pb2.ListAccountRequest.SerializeToString,
+            src_dot_handler__pb2.ListAccountResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -398,8 +399,8 @@ class Handler(object):
             request,
             target,
             '/Handler/DeleteAccount',
-            handler__pb2.DeleteAccountRequest.SerializeToString,
-            handler__pb2.DeleteAccountResponse.FromString,
+            src_dot_handler__pb2.DeleteAccountRequest.SerializeToString,
+            src_dot_handler__pb2.DeleteAccountResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -425,8 +426,8 @@ class Handler(object):
             request,
             target,
             '/Handler/FetchHomepage',
-            handler__pb2.FetchHomepageRequest.SerializeToString,
-            handler__pb2.FetchHomepageResponse.FromString,
+            src_dot_handler__pb2.FetchHomepageRequest.SerializeToString,
+            src_dot_handler__pb2.FetchHomepageResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -452,8 +453,8 @@ class Handler(object):
             request,
             target,
             '/Handler/FetchMessageUnread',
-            handler__pb2.FetchMessagesUnreadRequest.SerializeToString,
-            handler__pb2.FetchMessagesUnreadResponse.FromString,
+            src_dot_handler__pb2.FetchMessagesUnreadRequest.SerializeToString,
+            src_dot_handler__pb2.FetchMessagesUnreadResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -479,8 +480,8 @@ class Handler(object):
             request,
             target,
             '/Handler/FetchMessageRead',
-            handler__pb2.FetchMessagesReadRequest.SerializeToString,
-            handler__pb2.FetchMessagesReadResponse.FromString,
+            src_dot_handler__pb2.FetchMessagesReadRequest.SerializeToString,
+            src_dot_handler__pb2.FetchMessagesReadResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -506,8 +507,8 @@ class Handler(object):
             request,
             target,
             '/Handler/DeleteMessage',
-            handler__pb2.DeleteMessageRequest.SerializeToString,
-            handler__pb2.DeleteMessageResponse.FromString,
+            src_dot_handler__pb2.DeleteMessageRequest.SerializeToString,
+            src_dot_handler__pb2.DeleteMessageResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -533,8 +534,8 @@ class Handler(object):
             request,
             target,
             '/Handler/SendMessage',
-            handler__pb2.SendMessageRequest.SerializeToString,
-            handler__pb2.SendMessageResponse.FromString,
+            src_dot_handler__pb2.SendMessageRequest.SerializeToString,
+            src_dot_handler__pb2.SendMessageResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -560,8 +561,169 @@ class Handler(object):
             request,
             target,
             '/Handler/ReceiveMessage',
-            handler__pb2.ReceiveMessageRequest.SerializeToString,
-            handler__pb2.ReceiveMessageResponse.FromString,
+            src_dot_handler__pb2.ReceiveMessageRequest.SerializeToString,
+            src_dot_handler__pb2.ReceiveMessageResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class RaftStub(object):
+    """gRPC service definition for server-server
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.Vote = channel.unary_unary(
+                '/Raft/Vote',
+                request_serializer=src_dot_handler__pb2.VoteRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.VoteResponse.FromString,
+                _registered_method=True)
+        self.AppendEntries = channel.unary_unary(
+                '/Raft/AppendEntries',
+                request_serializer=src_dot_handler__pb2.AppendEntriesRequest.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.AppendEntriesResponse.FromString,
+                _registered_method=True)
+        self.GetLeader = channel.unary_unary(
+                '/Raft/GetLeader',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=src_dot_handler__pb2.GetLeaderResponse.FromString,
+                _registered_method=True)
+
+
+class RaftServicer(object):
+    """gRPC service definition for server-server
+    """
+
+    def Vote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AppendEntries(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetLeader(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_RaftServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'Vote': grpc.unary_unary_rpc_method_handler(
+                    servicer.Vote,
+                    request_deserializer=src_dot_handler__pb2.VoteRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.VoteResponse.SerializeToString,
+            ),
+            'AppendEntries': grpc.unary_unary_rpc_method_handler(
+                    servicer.AppendEntries,
+                    request_deserializer=src_dot_handler__pb2.AppendEntriesRequest.FromString,
+                    response_serializer=src_dot_handler__pb2.AppendEntriesResponse.SerializeToString,
+            ),
+            'GetLeader': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLeader,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=src_dot_handler__pb2.GetLeaderResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'Raft', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('Raft', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class Raft(object):
+    """gRPC service definition for server-server
+    """
+
+    @staticmethod
+    def Vote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Raft/Vote',
+            src_dot_handler__pb2.VoteRequest.SerializeToString,
+            src_dot_handler__pb2.VoteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AppendEntries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Raft/AppendEntries',
+            src_dot_handler__pb2.AppendEntriesRequest.SerializeToString,
+            src_dot_handler__pb2.AppendEntriesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLeader(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/Raft/GetLeader',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            src_dot_handler__pb2.GetLeaderResponse.FromString,
             options,
             channel_credentials,
             insecure,

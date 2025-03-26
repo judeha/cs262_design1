@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-// gRPC service definition
+import "google/protobuf/empty.proto";
+
+// gRPC service definition for client-server
 service Handler {
     rpc Ending(EndingRequest) returns (EndingResponse);
     rpc CheckAccountExists(AccountExistsRequest) returns (AccountExistsResponse);
@@ -15,6 +17,17 @@ service Handler {
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
     rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse);
 }
+
+// gRPC service definition for server-server
+service Raft {
+    rpc Vote(VoteRequest) returns (VoteResponse);
+    rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+    rpc GetLeader(google.protobuf.Empty) returns (GetLeaderResponse);
+}
+
+// ----------------------------------------------------------------------------------------------
+// Client Handler Messages
+// ----------------------------------------------------------------------------------------------
 
 // Message for Ending
 message EndingRequest {
@@ -143,6 +156,10 @@ message ReceiveMessageResponse {
     repeated Message msg_lst = 1;
 }
 
+// ----------------------------------------------------------------------------------------------
+// Atomic Messages
+// ----------------------------------------------------------------------------------------------
+
 // Schema for a message sent between clients
 message Message {
     int32 id = 1;
@@ -158,4 +175,51 @@ message Account {
     int32 id = 1;
     string username = 2;
     string bio = 3;
+}
+
+// ----------------------------------------------------------------------------------------------
+// Raft Messages
+// ----------------------------------------------------------------------------------------------
+
+message Entry {
+  oneof test_oneof {
+    EndingRequest endingrequest = 1;
+    AccountExistsRequest accountexistsrequest = 2;
+    CreateAccountRequest createaccountrequest = 3;
+    LoginAccountRequest loginaccountrequest = 4;
+    DeleteAccountRequest deleteaccountrequest = 5;
+    FetchHomepageRequest fetchhomepagerequest = 6;
+    FetchMessagesUnreadRequest fetchmessagesunreadrequest = 7;
+    FetchMessagesReadRequest fetchmessagesreadrequest = 8;
+    DeleteMessageRequest deletemessagerequest = 9;
+    SendMessageRequest sendmessagerequest = 10;
+    ReceiveMessageRequest receivmessagerequest = 11;
+  }
+}
+
+message VoteRequest {
+    int32 cand_term = 1;
+}
+
+message VoteResponse {
+    int32 term = 1;
+    bool success = 2;
+}
+
+message AppendEntriesRequest {
+    string leader_addr = 1;
+    int32 term = 2;
+    int32 prev_log_term = 3;
+    int32 prev_log_idx = 4;
+    repeated Entry entries = 5;
+    int32 commit = 6;
+}
+
+message AppendEntriesResponse {
+    int32 term = 1;
+    bool success = 2;
+}
+
+message GetLeaderResponse {
+    string leader_addr = 1;
 }
