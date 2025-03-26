@@ -138,17 +138,19 @@ class GRPCClient:
             resp = self.stub.SendMessage(req)
             return resp
         except:
-            # TODO: call find_new_leader for all unary actions.
-            pass
+            self._find_new_leader()
 
     def get_new_messages(self):
         """Retrieve any messages from the local queue."""
-        messages = []
-        while not self.incoming_queue.empty():
-            m = self.incoming_queue.get()
-            if isinstance(m, handler_pb2.Message):
-                messages.append(m)
-        return messages
+        try:
+            messages = []
+            while not self.incoming_queue.empty():
+                m = self.incoming_queue.get()
+                if isinstance(m, handler_pb2.Message):
+                    messages.append(m)
+            return messages
+        except:
+            self._find_new_leader()
 
     def stop(self):
         """Gracefully stop the client and close the connection."""
@@ -158,72 +160,83 @@ class GRPCClient:
     
     def check_account(self, username):
         """Check if the account exists."""
-        return self.stub.CheckAccountExists(handler_pb2.AccountExistsRequest(username=username))
+        try: 
+            return self.stub.CheckAccountExists(handler_pb2.AccountExistsRequest(username=username))
+        except:
+            self._find_new_leader()
     
     def create_account(self, username, password, bio):
         """Create a new account."""
-        return self.stub.CreateAccount(handler_pb2.CreateAccountRequest(username=username, password=password, bio=bio))
+        try:
+            return self.stub.CreateAccount(handler_pb2.CreateAccoun
+            tRequest(username=username, password=password, bio=bio))
+        except:
+            self._find_new_leader()
     
     def login(self, username, password):
         """Login to the server, creates a queue on the server side."""
-        self.username = username
-        req = handler_pb2.LoginAccountRequest(username=username, password=password)
-        resp = self.stub.LoginAccount(req)
-        # store any initial messages
-        for msg in resp.msg_lst:
-            self.incoming_queue.put((msg.sender, msg.content))
-        # start streaming thread
-        self._start_stream()
-        return resp
+        try:
+            self.username = username
+            req = handler_pb2.LoginAccountRequest(username=username, password=password)
+            resp = self.stub.LoginAccount(req)
+            # store any initial messages
+            for msg in resp.msg_lst:
+                self.incoming_queue.put((msg.sender, msg.content))
+            # start streaming thread
+            self._start_stream()
+            return resp
+        except:
+            self._find_new_leader()
     
     def delete_account(self, username, password):
         """Delete an existing account."""
-        return self.stub.DeleteAccount(handler_pb2.DeleteAccountRequest(username=username, password=password))
+        try:
+            return self.stub.DeleteAccount(handler_pb2.DeleteAccountRequest(username=username, password=password))
+        except:
+            self._find_new_leader()
     
     def list_accounts(self, pattern=None):
         """List all accounts matching the pattern."""
-        return self.stub.ListAccount(handler_pb2.ListAccountRequest(pattern=pattern))
+        try: 
+            return self.stub.ListAccount(handler_pb2.ListAccountRequest(pattern=pattern))
+        except:
+            self._find_new_leader()
     
     def delete_messages(self, username, msg_ids):
         """Delete messages by ID."""
-        return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, message_id_lst=msg_ids))
+        try:
+            return self.stub.DeleteMessage(handler_pb2.DeleteMessageRequest(username=username, message_id_lst=msg_ids))
+        except:
+            self._find_new_leader()
     
     def send_message(self, sender, receiver, content):
         """Send a message to a recipient."""
-        return self.stub.SendMessage(handler_pb2.SendMessageRequest(sender=sender, receiver=receiver, content=content))
+        try:
+            return self.stub.SendMessage(handler_pb2.SendMessageRequest(sender=sender, receiver=receiver, content=content))
+        except:
+            self._find_new_leader()
     
     def fetch_unread_messages(self, username, num_msgs):
         """Fetch unread messages."""
-        return self.stub.FetchMessageUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num=num_msgs))
+        try:
+            return self.stub.FetchMessageUnread(handler_pb2.FetchMessagesUnreadRequest(username=username, num=num_msgs))
+        except:
+            self._find_new_leader()
     
     def fetch_read_messages(self, username, num_msgs):
         """Fetch read messages."""
-        return self.stub.FetchMessageRead(handler_pb2.FetchMessagesReadRequest(username=username, num=num_msgs))
+        try:
+            return self.stub.FetchMessageRead(handler_pb2.FetchMessagesReadRequest(username=username, num=num_msgs))
+        except:
+            self._find_new_leader()
     
     def fetch_homepage(self, username):
         """Fetch the homepage."""
-        return self.stub.FetchHomepage(handler_pb2.FetchHomepageRequest(username=username))
+        try:
+            return self.stub.FetchHomepage(handler_pb2.FetchHomepageRequest(username=username))
+        except:
+            self._find_new_leader()
     
-    # def failover_to_leader(self, leader_addr):
-    #     # TODO: add client log
-    #     # Close existing channel and connect to new leader, when leader is known
-    #     self.channel.close()
-    #     self.channel = grpc.insecure_channel(leader_addr)
-    #     self.stub = handler_pb2_grpc.HandlerStub(self.channel)
-
-    # def find_new_leader(self):
-    #     for addr in self.backup_addresses:
-    #         try:
-    #             channel = grpc.insecure_channel(addr)
-    #             stub = handler_pb2_grpc.HandlerStub(channel)
-    #             response = stub.GetLeader(handler_pb2.Empty())
-    #             self.failover_to_leader(response.leader_address)
-    #             return
-    #         except RpcError:
-    #             continue
-    #     print("Failed to find a new leader.")
-
-
 # -----------------------------------------------------------------------------
 # GUI Class: basic chat window
 # -----------------------------------------------------------------------------
