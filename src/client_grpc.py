@@ -120,7 +120,7 @@ class GRPCClient:
         while not self.stop_event.is_set():
             try:
                 response = self.stub.Status(handler_pb2.Empty())
-                if response.role != "LEADER": #TODO: Change to variable role 
+                if response.role != "LEADER": 
                     print(f"Current server is not leader!")
                     
                     #Assumes that the servers will find the next leader 
