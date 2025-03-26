@@ -20,6 +20,7 @@ with open(yaml_path, "r") as y:
     config = yaml.safe_load(y)
 MIN_MESSAGE_LEN = config["min_message_len"]
 MAX_MESSAGE_LEN = config["max_message_len"]
+HEARTBEAT_LEN = config["heartbeat_len"]
 
 # Load server configuration
 idx = int(sys.argv[1])
@@ -40,9 +41,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logging.info("Server started")
-logging.info(f"Host: {host}")
-logging.info(f"Port: {port}")
+logging.info(f"[START] server {idx} at {host}:{port}")
 
 # Initialize the database
 database_setup(DB_PATH)
@@ -52,180 +51,222 @@ class Role:
     FOLLOWER = 0
     CANDIDATE = 1
     LEADER = 2
-role = Role.FOLLOWER
-leader_addr = None
-n_servers = len(config.get("servers"))
-all_servers = [f"{config.get('servers')[i]['host']}:{config.get('servers')[i]['port']}" for i in range(n_servers)]
-logs = []
-term = 0
-timer = random.randint(0,3)
-commit_idx = 0
-voted_for = None
-votes_recv = 0
-last_heartbeat = time.time()
+
+role: int = Role.FOLLOWER               # initial role
+leader_addr: str = None                 # <host>:<port>, like "localhost:50051"
+voted_for: int = None                   # candidate ID   
+n_servers = len(config.get("servers"))  # number of servers
+all_servers = [f"{config.get('servers')[i]['host']}:{config.get('servers')[i]['port']}" for i in range(n_servers)]                       # list of all server addresses
+logs = []                               # log of all actions for replication
+term = 0                                # tracks election cycle and log consistency 
+commit_idx = 0                          # highest log index known to be safely replicated
+votes_recv = 0                          # number of votes received
+last_heartbeat = time.time()            # last time a heartbeat was received
+timer = random.randint(0,3)             # election timer
 
 class HandlerService(handler_pb2_grpc.HandlerServicer):
     """
-    Handles standard communication between the server and a client using JSON encoding. Message is (fuzzily) equivalent to a server-stub.
+    Handles standard communication between the server and a client using JSON encoding. Each RPC call logs to 'logs' for replication purposes, then applies the requested DB operation.
     """
     def __init__(self):
         global active_clients, logs
         self.db_path = DB_PATH
 
     def set_path(self, path):
+        """Changes the DB path if needed for testing purposes"""
         self.db_path = path
 
     def Starting(self, request, context):
+        """Ping to verify connection"""
         response = handler_pb2.StartingResponse()
         response.status_code = ResponseCode.SUCCESS.value
         return response
     
     def CheckAccountExists(self, request, context):
+        """Check if an account with the given username exists"""
         # Add a new log entry
         logs.append(handler_pb2.Entry(acc_exists=request))
 
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
+        # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)
         # Process the request
         response = handler_pb2.AccountExistsResponse()
-        result = db.account_exists(request.username)
+        exists = db.account_exists(request.username)
         # Package the response
-        if not result:
+        if not exists:
             response.status_code = ResponseCode.ACCOUNT_NOT_FOUND.value
         else:
             response.status_code = ResponseCode.ACCOUNT_EXISTS.value
-            response.exists = result
+            response.exists = True
         return response
 
     def CreateAccount(self, request, context):
-        # Add a new log entry
+        """Create a new account (username, password, bio)"""
         logs.append(handler_pb2.Entry(create_acc=request))
+        db = DatabaseHandler(self.db_path)
 
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-        # Process the request
         response = handler_pb2.CreateAccountResponse()
         result = db.create_account(request.username, request.password, request.bio)
-        # Package the response
         response.status_code = result["status_code"]
         return response
     
     def LoginAccount(self, request, context):
+        """Login to an existing account (username, password), returns some unread messages """
         logs.append(handler_pb2.Entry(login_acc=request))
-
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-        # Process the request
+        db = DatabaseHandler(self.db_path)
+        
         response = handler_pb2.LoginAccountResponse()
         result = db.login_account(request.username, request.password)
-        # Package the response
         response.status_code = result["status_code"]
+        # Fetch the messages if login was successful
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
             response.count = data.pop(0)
-            data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
-                                        content=msg[3],timestamp=msg[4]) for msg in data]
+            data = [handler_pb2.Message(id=m[0],
+                                        sender=m[1],
+                                        receiver=m[2],
+                                        content=m[3],
+                                        timestamp=m[4])
+                                        for m in data]
             response.msg_lst.extend(data)
-            # Add the client to the active clients mapping
+
+            # Mark user as active
             with lock:
                 active_clients[request.username] = queue.Queue()
-        
         return response
         
     def ListAccount(self, request, context):
+        """List all accounts matching an optoinal pattern"""
         logs.append(handler_pb2.Entry(list_acc=request))
-
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
+        
         response = handler_pb2.ListAccountResponse()
-        result = db.list_accounts(request.pattern)
-
         result = db.list_accounts(pattern=request.pattern or "")
-
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
-            data = [handler_pb2.Account(id=acct[0], username=acct[1], bio=acct[2]) for acct in data]
-            response.acct_lst.extend(data)
-
+            pb_accts = [
+                handler_pb2.Account(
+                    id=a[0],
+                    username=a[1],
+                    bio=a[2]
+                    )
+                    for a in data
+                ]
+            response.acct_lst.extend(pb_accts)
         return response 
     
     def DeleteAccount(self, request, context):
-        logs.append(handler_pb2.Entry(create_acc=request))
+        """Deletes an account (username, password)"""
+        logs.append(handler_pb2.Entry(delete_acc=request))
+        db = DatabaseHandler(self.db_path)
 
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
         response = handler_pb2.DeleteAccountResponse()
         result = db.delete_account(request.username, request.password)
-        # Package the response
         response.status_code = result["status_code"]
-
         return response
 
     def FetchHomepage(self, request, context):
+        """Fetches homepage data for a user"""
         logs.append(handler_pb2.Entry(fetch_homepage=request))
+        db = DatabaseHandler(self.db_path)
 
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-        # Create fresh DB instance
         response = handler_pb2.FetchHomepageResponse()
         result = db.fetch_homepage(request.username)
-
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
-            data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
-                                        content=msg[3],timestamp=msg[4]) for msg in data]
+            data = [
+                handler_pb2.Message(
+                    id=m[0],
+                    sender=m[1],
+                    receiver=m[2],
+                    content=m[3],
+                    timestamp=m[4]
+                )
+                for m in data
+            ]
             response.msg_lst.extend(data)
-
         return response 
 
     def FetchMessageRead(self, request, context):
+        """Fetches the last N delivered (read) messages"""
         logs.append(handler_pb2.Entry(fetch_read=request))
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
+        db = DatabaseHandler(self.db_path)
+
         response = handler_pb2.FetchMessagesReadResponse()
         result = db.fetch_messages_delivered(request.username, request.num)
-
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
-            data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
-                                        content=msg[3],timestamp=msg[4]) for msg in data]
+            data = [
+                handler_pb2.Message(
+                    id=m[0],
+                    sender=m[1],
+                    receiver=m[2],
+                    content=m[3],
+                    timestamp=m[4]
+                )
+                for m in data
+            ]
             response.msg_lst.extend(data)
-
         return response 
 
     def FetchMessageUnread(self, request, context):
+        """Fetches the last N undelivered (unread) messages"""
         logs.append(handler_pb2.Entry(fetch_read=request))
-
         db = DatabaseHandler(self.db_path)  # Create fresh DB instance
+        
         response = handler_pb2.FetchMessagesUnreadResponse()
         result = db.fetch_messages_undelivered(request.username, request.num)
-
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
             response.count = data.pop(0)
-            data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
-                                        content=msg[3],timestamp=msg[4]) for msg in data]
-            response.msg_lst.extend(data)
-        # return self.FetchHomepage(request.username)
+            pb_msgs = [
+                handler_pb2.Message(
+                    id=m[0],
+                    sender=m[1],
+                    receiver=m[2],
+                    content=m[3],
+                    timestamp=m[4]
+                )
+                for m in data
+            ]
+            response.msg_lst.extend(pb_msgs)
         return response
 
-
     def DeleteMessage(self, request, context):
+        """Delete specific messages by ID"""
         logs.append(handler_pb2.Entry(delete_msg=request))
+        db = DatabaseHandler(self.db_path)
 
-        db = DatabaseHandler(self.db_path)  # Create fresh DB instance
-        # Process the request
         response = handler_pb2.DeleteMessageResponse()
         result = db.delete_messages(request.username, request.message_id_lst)
-        # Package the response
         response.status_code = result["status_code"]
         if result["status_code"] == ResponseCode.SUCCESS.value:
             data = result["data"]
             response.count = data.pop(0)
-            data = [handler_pb2.Message(id=msg[0], sender=msg[1], receiver=msg[2],
-                                        content=msg[3],timestamp=msg[4]) for msg in data]
-            response.msg_lst.extend(data)
-    
+            pb_msgs = [
+                handler_pb2.Message(
+                    id=m[0],
+                    sender=m[1],
+                    receiver=m[2],
+                    content=m[3],
+                    timestamp=m[4]
+                )
+                for m in data
+            ]
+            response.msg_lst.extend(pb_msgs)
         return response
     
     def SendMessage(self, request_iterator, context):
+        """
+        Client-streaming RPC:
+        - Each "SendMessageRequest" from the iterator is a single message
+        - Insert the message into the database
+        - If the receiver is online, immediately push the message to their queue
+        """
         db = DatabaseHandler(self.db_path)
         delivered_count = 0
         total_count = 0
@@ -236,14 +277,14 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
             content = req.content
             timestamp = round(time.time())
 
+            # Add to 'logs' for replication
             req.timestamp = timestamp
             logs.append(handler_pb2.Entry(send_msg=req))
 
-            # Check if receiver is online
+            # Mark as delivered if receiver is online
             with lock:
                 is_online = receiver in active_clients
 
-            # Insert message (delivered=1 if online, else 0)
             result = db.insert_message(sender, receiver, content, timestamp, is_online)
             total_count += 1
             if result["status_code"] == ResponseCode.SUCCESS.value:
@@ -268,15 +309,15 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
         return response
     
     def ReceiveMessage(self, request, context):
-        """Continuously stream new messages to the client."""
-
+        """
+        Continuously stream new messages to the client
+        - Yields new messages from the user's queue as they arrive
+        """
         logs.append(handler_pb2.Entry(receive_msg=request))
-
         username = request.username
         with lock:
             if username not in active_clients:
                 return
-
             user_queue = active_clients[username]
 
         while True:
@@ -289,11 +330,11 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                 yield response
 
             except queue.Empty:
-                # no messages arrived in 30s, keep waiting
+                # If no messages for some time, keep waiting
                 continue
 
     def Ending(self, request, context):
-        """Removes a client from active_clients."""
+        """Removes a client from active_clients (logout)."""
         logs.append(handler_pb2.Entry(ending=request))
         username = request.username
         with lock:
@@ -304,54 +345,72 @@ class HandlerService(handler_pb2_grpc.HandlerServicer):
                 return response
             
 class RaftService(handler_pb2_grpc.RaftServicer):
+    """
+    Basic Raft implementation for leader election and log replication
+    """
     def Vote(self, request, context):
         global term, voted_for, leader_addr
-        # TODO: local logging
+        logging.info(f"[RAFT] Received VoteRequest | cand_id: {request.cand_id}, cand_term: {request.cand_term}, prev_log_idx: {request.prev_log_idx}, prev_log_term: {request.prev_log_term}")
 
         # If candidate is behind me, reject
         if request.cand_term < term or voted_for is None:
+            logging.info(f"[RAFT] Rejected VoteRequest | cand_term: {request.cand_term}, term: {term}")
             return handler_pb2.VoteResponse(term=term, success=False)
         # If candidate is ahead of me, vote for them + update my term
         if request.cand_term >= term:
+            logging.info(f"[RAFT] Accepted VoteRequest | cand_term: {request.cand_term}, term: {term}")
             term = request.cand_term
             voted_for = request.cand_id
             leader_addr = None
             return handler_pb2.VoteResponse(term=term, success=True)
 
     def AppendEntries(self, request, context):
-        """Followers respond to leader's heartbeat"""
+        """
+        Followers respond to leader's heartbeat
+        Used for log replication
+        """
         global leader_addr, logs, DB_PATH, timer, role, voted_for, last_heartbeat
-        # TODO: implement checks if role is Role.LEADER
-        # TODO: local logging
+        logging.info(f"[RAFT] Received AppendEntriesRequest | leader_addr: {leader_addr}, term: {request.term}, prev_log_idx: {request.prev_log_idx}, prev_log_term: {request.prev_log_term}, commit: {request.commit}")
 
+        # Reset vote
         voted_for = None
+
+        # Update timers
         timer = time.time() + random.uniform(0, 0.5)
         last_heartbeat = time.time()
-
+        
+        # Become FOLLOWER if not already
         role = Role.FOLLOWER # NEW
 
         # 1) Update leader_addr?
         if request.leader_addr != leader_addr:
+            logging.info(f"[RAFT] Switched leader | leader_addr: {leader_addr}, request.leader_addr: {request.leader_addr}")
             leader_addr = request.leader_addr
-            # TODO: local logging
         # 2) Exist new entries?
         if len(logs) - 1 == request.prev_log_idx:
             return handler_pb2.AppendEntriesResponse(term=term, success=True)
         # 3) Apply actions
         for entry in request.entries[request.commit + 1]:
             logs.append(entry)
+            logging.info(f"[RAFT] Applying action | entry: {entry}")
             apply_action(entry, DB_PATH)
         return handler_pb2.AppendEntriesResponse(term=request.term, success=True)
     
     def GetLeader(self, request, context):
+        """Return the current leader address"""
         global leader_addr
+        logging.info(f"[RAFT] Get leader | leader_addr: {leader_addr}")
         return handler_pb2.GetLeaderResponse(leader_addr=leader_addr)
 
 def serve():
-    """Main loop"""
-    global all_servers, votes_recv, idx, term, role, timer, logs, commit_idx, voted_for, n_servers, leader_addr, host, port
+    """
+    Main loop for starting the gRPC server. 
+    Also runs a minimal 'Raft-like' election loop.
+    """
+    global all_servers, votes_recv, idx, term, role, timer, logs
+    global commit_idx, voted_for, n_servers, leader_addr, host, port, last_heartbeat
 
-    # Setup
+    # Setup gRPC server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     handler_pb2_grpc.add_HandlerServicer_to_server(HandlerService(), server)
     handler_pb2_grpc.add_RaftServicer_to_server(RaftService(), server)
@@ -370,40 +429,35 @@ def serve():
                 prev_log_term=0
                 )
             )
-            # TODO: local logging
+            logging.info(f"[RAFT] Connecting | server: {s}, leader_addr: {leader_addr}")
             channel.close()
             break
         except Exception as e:
-            # TODO: local logging
+            logging.error(f"[RAFT] Connection error | server: {s}, error: {e}")
             time.sleep(1)
 
-    # TODO: local logging
     # Sleep for random amount of time to allow for election
     time.sleep(random.random())
 
     # Take actions based on role
     try:
         while True:
-            print("Here", role, leader_addr)
             if role == Role.FOLLOWER:
                 # If no leader heartbeat: trigger election (will automatically call AppendEntries upon receiving)
-                # if time.time() > timer:
-                if time.time() - last_heartbeat > 1:
-                    # TODO: local logging
+                if time.time() - last_heartbeat > HEARTBEAT_LEN:
+                    logging.info(f"[RAFT] Election | term: {term}")
                     term += 1
                     voted_for = None
                     leader_addr = None
                     role = Role.CANDIDATE
-                    # timer = time.time() + random.uniform(1.0, 2.0)
-
             elif role == Role.CANDIDATE:
                 if time.time() > timer:
-                    timer = time.time() + random.uniform(3,5) # NOTE: why?
+                    # Reset timer
+                    timer = time.time() + random.uniform(3,5)
 
                     # Vote for self
                     votes_recv = 1
                     voted_for = idx
-                    # TODO: local logging
 
                     # Request other servers to vote for me
                     for s in all_servers:
@@ -417,71 +471,61 @@ def serve():
                                 prev_log_term=logs[-1].term if logs else 0,
                                 )
                             )
-                            # TODO: local logging
                             if response.success:
                                 votes_recv += 1
+                            logging.info(f"[RAFT] Requesting vote | server: {s}, success: {response.success}, votes_recv: {votes_recv}, leader_addr: {leader_addr}")
                         except Exception as e:
-                            continue
-                            # TODO: local logging
+                            logging.error(f"[RAFT] Connection error | server: {s}, error: {e}")
+                            pass
                     # If you win the election
                     if votes_recv > n_servers // 2:
                         role = Role.LEADER
                         leader_addr = f"{host}:{port}"
+                        logging.info(f"[RAFT] Won election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
                         # TODO: broadcast to all other servers + client?
-                    # TODO: local logging
+                    else:
+                        logging.info(f"[RAFT] Lost election | votes_recv: {votes_recv}, n_servers: {n_servers}, term: {term}, leader_addr: {leader_addr}")
             elif role == Role.LEADER:
-                # Send heartbeat
+                # Send heartbeat (AppendEntries)
                 ack = 0
                 for s in all_servers:
                     try:
-                        if s != leader_addr: # NEW
-                            channel = grpc.insecure_channel(s)
-                            stub = handler_pb2_grpc.RaftStub(channel)
-                            # Send out all logs TODO: optimize to just send snapshot
-                            response = stub.AppendEntries(handler_pb2.AppendEntriesRequest(
-                                leader_addr=leader_addr,
-                                term=term,
-                                prev_log_term=logs[-1].term if logs else 0,
-                                prev_log_idx=len(logs) - 1,
-                                entries=logs,
-                                commit=commit_idx)
-                            )
-                            # print(response.success)
-                            ack += response.success
-                            # TODO: local logging
-                            channel.close()
+                        channel = grpc.insecure_channel(s)
+                        stub = handler_pb2_grpc.RaftStub(channel)
+                        # Send out all logs TODO: optimize to just send snapshot
+                        response = stub.AppendEntries(handler_pb2.AppendEntriesRequest(
+                            leader_addr=leader_addr,
+                            term=term,
+                            prev_log_term=logs[-1].term if logs else 0,
+                            prev_log_idx=len(logs) - 1,
+                            entries=logs,
+                            commit=commit_idx)
+                        )
+                        ack += response.success
+                        channel.close()
+                        logging.info(f"[RAFT] Sent heartbeat | server: {s}, success: {response.success}, ack: {ack}")
                     except Exception as e:
-                        # print(e)
-                        # TODO: local logging
+                        logging.error(f"[RAFT] Sent heartbeat erro | server: {s}, error: {e}")
                         pass
                 # If ACK successful
                 if ack >= n_servers // 2:
                     # Commit change --> move forward index
                     commit_idx = len(logs) - 1
+                    logging.info(f"[RAFT] Committed change | commit_idx: {commit_idx}")
                 else:
                     # Lose leader role
-                    print("Lost leader", ack)
                     role = Role.FOLLOWER
                     leader_addr = None
-                    # TODO: local logging
+                    logging.info(f"[RAFT] Lost leader role | leader_addr: {leader_addr}")
             else:
+                logging.error(f"[RAFT] Invalid role | role: {role}")
                 pass
-                # TODO: local logging
             time.sleep(0.1)
     except KeyboardInterrupt:
+        logging.info(f"[END] server {idx} at {host}:{port}")
         server.stop(0)
 
     server.wait_for_termination()
 
 if __name__ == "__main__":
-    # Parse optional command-line arguments
-    # TODO how to test multiple servers?
-    import argparse
-
-    # parser = argparse.ArgumentParser(description="Start the chat server.")
-    # parser.add_argument("--host", type=str, default=DEFAULT_HOST, help="Server host (default from config)")
-    # parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Server port (default from config)")
-
-    # args = parser.parse_args()
-    # serve(host=args.host, port=args.port)
     serve()

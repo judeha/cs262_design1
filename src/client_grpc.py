@@ -141,6 +141,26 @@ class GRPCClient:
     def fetch_homepage(self, username):
         """Fetch the homepage."""
         return self.stub.FetchHomepage(handler_pb2.FetchHomepageRequest(username=username))
+    
+    # def failover_to_leader(self, leader_addr):
+    #     # TODO: add client log
+    #     # Close existing channel and connect to new leader, when leader is known
+    #     self.channel.close()
+    #     self.channel = grpc.insecure_channel(leader_addr)
+    #     self.stub = handler_pb2_grpc.HandlerStub(self.channel)
+
+    # def find_new_leader(self):
+    #     for addr in self.backup_addresses:
+    #         try:
+    #             channel = grpc.insecure_channel(addr)
+    #             stub = handler_pb2_grpc.HandlerStub(channel)
+    #             response = stub.GetLeader(handler_pb2.Empty())
+    #             self.failover_to_leader(response.leader_address)
+    #             return
+    #         except RpcError:
+    #             continue
+    #     print("Failed to find a new leader.")
+
 
 # -----------------------------------------------------------------------------
 # GUI Class: basic chat window
